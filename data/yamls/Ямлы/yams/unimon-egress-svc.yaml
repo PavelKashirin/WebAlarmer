@@ -1,0 +1,46 @@
+# ${distrib.release.version} - версия релиза (пример: RO1)
+# ${istio-control-plane-project} - имя проекта, где развернут ваш control-plane (пример: ci01994970-edevgen2-control-panel)
+
+kind: Service
+apiVersion: v1
+metadata:
+  name: egressgateway-monitoring-${distrib.release.version}
+  labels:
+    app: egressgateway-umon${projectName}
+    app-group: "unimon-egress"
+    app.kubernetes.io/part-of: istio
+    app.kubernetes.io/instance: ${istio-control-plane-project}
+    release: istio
+    app.kubernetes.io/version: 2.0.2-3.el8-76
+    app.kubernetes.io/component: gateways
+    istio: egressgateway-umon${projectName}
+    app.kubernetes.io/managed-by: maistra-istio-operator
+    maistra.io/owner: ${istio-control-plane-project}
+    maistra-version: 2.0.2
+    app.kubernetes.io/name: gateways
+    chart: gateways
+    heritage: Tiller
+spec:
+  ports:
+    - name: http-7070
+      protocol: TCP
+      port: 7070
+      targetPort: 7070
+    - name: http-7071
+      protocol: TCP
+      port: 7071
+      targetPort: 7071
+    - name: https
+      protocol: TCP
+      port: 443
+      targetPort: 8443
+    - name: status-port
+      protocol: TCP
+      port: 15021
+      targetPort: 15021
+  selector:
+    app: egressgateway-umon${projectName}
+    istio: egressgateway-umon${projectName}
+  type: ClusterIP
+status:
+  loadBalancer: {}

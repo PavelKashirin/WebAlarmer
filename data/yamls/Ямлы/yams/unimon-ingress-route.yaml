@@ -1,0 +1,31 @@
+# ${distrib.release.version} - версия релиза (пример: RO1)
+# ${appsDomain} - домен кластера OpenShift (пример: apps.dev-gen2.sigma.sbrf.ru)
+
+kind: Route
+apiVersion: route.openshift.io/v1
+metadata:
+  name: ingressgateway-monitoring-${distrib.release.version}
+  labels:
+    app: ingressgateway-umon-${projectName}
+    app-group: "unimon-ingress"
+    chart: gateways
+    heritage: Tiller
+    istio: ingressgateway-umon-${projectName}
+    release: istio
+  annotations:
+    openshift.io/host.generated: 'true'
+    haproxy.router.openshift.io/rate-limit-connections: '${istio.ingress.route.rate-limit-connections}'
+    haproxy.router.openshift.io/rate-limit-connections.concurrent-tcp: '${istio.ingress.route.rate-limit-connections.concurrent-tcp}'
+    haproxy.router.openshift.io/timeout-tunnel: ${istio.ingress.route.timeout-tunnel}
+spec:
+  host: 'ingress.unimon.${projectName}.${appsDomain}'
+  subdomain: ''
+  to:
+    kind: Service
+    name: ingressgateway-monitoring-${distrib.release.version}
+    weight: 100
+  port:
+    targetPort: https-11443
+  tls:
+    termination: passthrough
+  wildcardPolicy: None

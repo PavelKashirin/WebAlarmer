@@ -1,0 +1,25 @@
+# ${distrib.release.version} - версия релиза (пример: RO1)
+# ${appsDomain} - домен кластера OpenShift (пример: apps.dev-gen2.sigma.sbrf.ru)
+# ${projectName} - иям проекта OpenShift
+
+
+kind: Route
+apiVersion: route.openshift.io/v1
+metadata:
+  annotations:
+    haproxy.router.openshift.io/rate-limit-connections: '${unimon-sender.openshift.route.rate-limit-connections}'
+    haproxy.router.openshift.io/rate-limit-connections.concurrent-tcp: '${unimon-sender.openshift.route.rate-limit-connections.concurrent-tcp}'
+    haproxy.router.openshift.io/timeout-tunnel: ${unimon-sender.openshift.route.timeout-tunnel}
+  name: unimon-sender-${distrib.release.version}
+  labels:
+    app: unimon-sender-${distrib.release.version}
+    app-group: "unimon-sender"
+spec:
+  host: '${distrib.release.version}.unimon-sender.${projectName}.${appsDomain}'
+  to:
+    kind: Service
+    name: unimon-sender-${distrib.release.version}
+    weight: 100
+  port:
+    targetPort: http-for-write-metrics
+  wildcardPolicy: None

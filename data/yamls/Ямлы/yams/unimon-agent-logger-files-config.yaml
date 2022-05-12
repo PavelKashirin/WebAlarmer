@@ -1,0 +1,64 @@
+# D-03.000.00-1192_client - номер сборки дистрибутива (пример: R1-109)
+
+kind: ConfigMap
+apiVersion: v1
+metadata:
+  name: unimon-agent-logger-files-config.r3
+  labels:
+    app: "logger-forwarder-sidecar"
+    app-group: "unimon-agent"
+    ts: "unimon"
+    version: "D-03.000.00-1192_client"
+data:
+  parsers.conf: |-
+    [PARSER]
+        Name custom
+        Format json
+        Time_Key ts
+        Time_Format %Y-%m-%dT%H:%M:%S.%L%z
+  time_converter.lua: |-
+    function override_time(tag, timestamp, record)
+      new_record = record
+      -- example: "2021-09-23T13:58:49.911Z
+      p="(%d+)-(%d+)-(%d+)T(%d+):(%d+):(%d+).(%d+)"
+      year,month,day,hour,min,sec,millis=record["ts"]:match(p)
+      new_record["ts"] = os.time({day=day,month=month,year=year,hour=hour,min=min,sec=sec,isdst=false}) * 1000 + millis
+      return 1, timestamp, new_record
+    end
+  fluent-bit.conf: |-
+    [SERVICE]
+        Flush        1
+        Daemon       Off
+        Parsers_File /fluent-bit/etc/parsers.conf
+
+    [INPUT]
+        Name tail
+        Path /var/log/unimon-agent-log/*.json
+        Mem_Buf_Limit 5MB
+        Skip_Long_Lines On
+        Parser custom
+
+    [FILTER]
+        Name lua
+        Match *
+        script /fluent-bit/etc/time_converter.lua
+        call override_time
+
+    [FILTER]
+        Name modify
+        Match *
+        Add cluster ${clusterName}
+        Add namespace ci01098420-idevgen-allowanceift
+        Add node %{NODE}
+        Add pod unimon-sender-r3
+        Add service unimon-agent
+        Add moduleVersion D-03.000.00-1192_client
+        Add moduleId unimon-agent
+        Add application unimon-agent
+        Add standId ${logger.labels.standid}
+        Rename msg message
+        Rename ts serverEventDatetime
+        Rename level levelStr
+    [OUTPUT]
+        Name stdout
+        Match *

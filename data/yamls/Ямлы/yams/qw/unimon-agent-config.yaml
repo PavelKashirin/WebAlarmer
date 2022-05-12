@@ -1,0 +1,250 @@
+# ${distrib.release.version} - версия релиза (пример: RO1).
+# D-03.000.00-1192_client - номер сборки дистрибутива (пример: R1-109)
+# ${namespace} - Namespace, в который устанавливается Unimon-agent, с которого в дальнейшем будет производится сбор
+#                клиентских, а также и системных метрик (пример: ci01976100-edevgen2-unimon-dev)
+# ${TENANT} - тенант клиента (пример: LOG)
+# ${unimon-agent.scraping.file-discovery.targets.filename} - Имя файла, который содержит список таргетов для скрейпинга (targets.json)
+# ${UNIMON_SENDER_URL} - URL для отправки метрик в приложение Unimon-sender (пример: http://unimon-sender-ver201:8080/monitoring/v1/metrics/send)
+# ${unimon-agent.scraping.federate.enable} - включает/выключает сбор метрик с инфры (включить - enable_federate, выключить - disable_federate)
+
+kind: ConfigMap
+apiVersion: v1
+metadata:
+  name: unimon-agent-config
+  labels:
+    app: "unimon-agent-${distrib.release.version}"
+    app-group: "unimon-agent"
+    ts: "unimon"
+    version: "D-03.000.00-1192_client"
+data:
+  enable_federate.json: |
+    [{"targets":["${unimon-agent.scraping.federate.host}:${unimon-agent.scraping.federate.port}"],
+    "labels": {"unimonId": "${unimon-agent.scraping.federate.unimonId}"}}]
+  disable_federate.json: |
+    [{"targets":[""]}]
+  prometheus.yml: |-
+    global:
+        scrape_interval: ${unimon-agent.scraping.global.interval}
+        scrape_timeout: ${unimon-agent.scraping.global.timeout}
+    scrape_configs:
+        - job_name: 'prometheus-selfmonitoring'
+          file_sd_configs:
+            - files:
+                - "/etc/unimon-agent/file-sd-configs/selfmonitoring.json"
+          relabel_configs:
+            - source_labels: [__address__]
+              separator: ;
+              regex: (.*)
+              target_label: unimonId
+              action: replace
+              replacement: ${unimon-agent.scraping.selfmonitoring.unimonId}
+        - job_name: 'kubernetes-pods'
+          kubernetes_sd_configs:
+            - role: endpoints
+              namespaces:
+                names:
+                  - "${namespace}"
+          relabel_configs:
+            - source_labels: [__meta_kubernetes_service_annotation_prometheus_io_scrape]
+              regex: true
+              action: keep
+            - source_labels: [__meta_kubernetes_service_annotation_prometheus_io_path]
+              regex: (.+)
+              target_label: __metrics_path__
+              action: replace
+            - source_labels: [__meta_kubernetes_service_annotation_prometheus_io_scheme]
+              action: drop
+              regex: https
+            - source_labels: [__address__, __meta_kubernetes_service_annotation_prometheus_io_port]
+              action: replace
+              target_label: __address__
+              regex: ([^:]+)(?::\d+)?;(\d+)
+              replacement: $1:$2
+            - source_labels: [__meta_kubernetes_namespace]
+              separator: ;
+              regex: (.*)
+              target_label: namespace
+              replacement: $1
+              action: replace
+            - source_labels: [__meta_kubernetes_pod_name]
+              separator: ;
+              regex: (.*)
+              target_label: pod
+              replacement: $1
+              action: replace
+            - source_labels: [__meta_kubernetes_service_name]
+              separator: ;
+              regex: (.*)
+              target_label: service
+              replacement: $1
+              action: replace
+            - source_labels: [__meta_kubernetes_pod_node_name]
+              separator: ;
+              regex: (.*)
+              target_label: nodeName
+              replacement: $1
+              action: replace
+            - action: labelmap
+              regex: __meta_kubernetes_pod_label_(.+)
+            - source_labels: [__address__]
+              separator: ;
+              regex: (.*)
+              target_label: unimonVersion
+              action: replace
+              replacement: "D-03.000.00-1192_client"
+            - source_labels: [__address__]
+              separator: ;
+              regex: (.*)
+              target_label: tenant
+              action: replace
+              replacement: "${TENANT}"
+            - source_labels: [__address__]
+              separator: ;
+              regex: (.*)
+              target_label: source
+              action: replace
+              replacement: OpenShift
+        - job_name: 'kubernetes-pods-https'
+          scheme: https
+          tls_config:
+            ca_file: /etc/istio-ca-certs/root.crt
+            cert_file: /etc/istio-certs/tls.crt
+            key_file: /etc/istio-certs/tls.key
+            insecure_skip_verify: true
+          kubernetes_sd_configs:
+            - role: endpoints
+              namespaces:
+                names:
+                  - "${namespace}"
+          relabel_configs:
+            - source_labels: [__meta_kubernetes_service_annotation_prometheus_io_scrape]
+              regex: true
+              action: keep
+            - source_labels: [__meta_kubernetes_service_annotation_prometheus_io_path]
+              regex: (.+)
+              target_label: __metrics_path__
+              action: replace
+            - source_labels: [__meta_kubernetes_service_annotation_prometheus_io_scheme]
+              action: keep
+              regex: https
+            - source_labels: [__address__, __meta_kubernetes_service_annotation_prometheus_io_port]
+              action: replace
+              target_label: __address__
+              regex: ([^:]+)(?::\d+)?;(\d+)
+              replacement: $1:$2
+            - source_labels: [__meta_kubernetes_namespace]
+              separator: ;
+              regex: (.*)
+              target_label: namespace
+              replacement: $1
+              action: replace
+            - source_labels: [__meta_kubernetes_pod_name]
+              separator: ;
+              regex: (.*)
+              target_label: pod
+              replacement: $1
+              action: replace
+            - source_labels: [__meta_kubernetes_service_name]
+              separator: ;
+              regex: (.*)
+              target_label: service
+              replacement: $1
+              action: replace
+            - source_labels: [__meta_kubernetes_pod_node_name]
+              separator: ;
+              regex: (.*)
+              target_label: nodeName
+              replacement: $1
+              action: replace
+            - action: labelmap
+              regex: __meta_kubernetes_pod_label_(.+)
+            - source_labels: [__address__]
+              separator: ;
+              regex: (.*)
+              target_label: unimonVersion
+              action: replace
+              replacement: "D-03.000.00-1192_client"
+            - source_labels: [__address__]
+              separator: ;
+              regex: (.*)
+              target_label: tenant
+              action: replace
+              replacement: "${TENANT}"
+            - source_labels: [__address__]
+              separator: ;
+              regex: (.*)
+              target_label: source
+              action: replace
+              replacement: OpenShift
+
+        - job_name: system-federate-metrics
+          file_sd_configs:
+            - files:
+                - "/etc/unimon-agent/${unimon-agent.scraping.federate.enable}.json"
+          scrape_interval: ${unimon-agent.scraping.federate.interval}
+          scrape_timeout: ${unimon-agent.scraping.federate.timeout}
+          honor_labels: true
+          honor_timestamps: true
+          params:
+            match[]:
+              - '{namespace="${namespace}"}'
+          metrics_path: /federate
+          scheme: https
+          bearer_token_file: /var/run/secrets/kubernetes.io/serviceaccount/token
+          tls_config:
+            ca_file: /var/run/secrets/kubernetes.io/serviceaccount/service-ca.crt
+            insecure_skip_verify: false
+          metric_relabel_configs:
+            - action: labeldrop
+              regex: prometheus_replica
+            - action: labeldrop
+              regex: prometheus
+            - source_labels: [node]
+              separator: ;
+              regex: (.*)
+              target_label: nodeName
+              replacement: $1
+              action: replace
+            - action: labeldrop
+              regex: node
+          relabel_configs:
+            - source_labels: [__address__]
+              separator: ;
+              regex: (.*)
+              target_label: unimonVersion
+              action: replace
+              replacement: "D-03.000.00-1192_client"
+            - source_labels: [__address__]
+              separator: ;
+              regex: (.*)
+              target_label: tenant
+              action: replace
+              replacement: ${TENANT}
+            - source_labels: [__address__]
+              separator: ;
+              regex: (.*)
+              target_label: source
+              action: replace
+              replacement: OpenShift
+            - source_labels: [__address__]
+              separator: ;
+              regex: (.*)
+              target_label: typeMetric
+              action: replace
+              replacement: Infra
+        - job_name: 'file-discovery-metrics'
+          honor_timestamps: true
+          scrape_interval: ${unimon-agent.scraping.file-discovery.interval}
+          scrape_timeout: ${unimon-agent.scraping.file-discovery.timeout}
+          relabel_configs:
+            - source_labels: [__address__]
+              separator: ;
+              regex: ^(.*):\\d+$
+              target_label: instance
+              replacement: $1
+          file_sd_configs:
+            - files:
+                - "/etc/unimon-agent/file-discovery-config/${unimon-agent.scraping.file-discovery.targets.filename}"
+
+    remote_write:
+      - url: "${UNIMON_SENDER_URL}"

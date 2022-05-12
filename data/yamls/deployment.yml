@@ -1,0 +1,524 @@
+apiVersion: v1
+kind: Service
+metadata:
+  labels:
+    template: egress-rman-nsi
+  name: egressgateway-svc
+spec:
+  ports:
+    - name: http-7000
+      port: 7000
+  selector:
+    app: egressgateway-ci01098420-idevgen-udkzift
+    istio: egressgateway-ci01098420-idevgen-udkzift
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  labels:
+    app: egressgateway-ci01098420-idevgen-udkzift
+    app.kubernetes.io/component: gateways
+    app.kubernetes.io/instance: ci01994970-idevgen-control-panel-synapse-ift
+    app.kubernetes.io/name: gateways
+    app.kubernetes.io/part-of: istio
+    chart: gateways
+    heritage: Tiller
+    istio: egressgateway-ci01098420-idevgen-udkzift
+    release: istio
+    template: egress-rman-nsi
+  name: egressgateway-ci01098420-idevgen-udkzift
+spec:
+  progressDeadlineSeconds: 1200
+  replicas: 1
+  revisionHistoryLimit: 10
+  selector:
+    matchLabels:
+      app: egressgateway-ci01098420-idevgen-udkzift
+      istio: egressgateway-ci01098420-idevgen-udkzift
+  strategy:
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 1
+    type: RollingUpdate
+  template:
+    metadata:
+      annotations:
+        sidecar.istio.io/inject: "false"
+      creationTimestamp: null
+      labels:
+        app: egressgateway-ci01098420-idevgen-udkzift
+        chart: gateways
+        heritage: Tiller
+        istio: egressgateway-ci01098420-idevgen-udkzift
+        release: istio
+    spec:
+      affinity:
+        nodeAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+            - preference:
+                matchExpressions:
+                  - key: beta.kubernetes.io/arch
+                    operator: In
+                    values:
+                      - amd64
+              weight: 2
+            - preference:
+                matchExpressions:
+                  - key: beta.kubernetes.io/arch
+                    operator: In
+                    values:
+                      - ppc64le
+              weight: 2
+            - preference:
+                matchExpressions:
+                  - key: beta.kubernetes.io/arch
+                    operator: In
+                    values:
+                      - s390x
+              weight: 2
+          requiredDuringSchedulingIgnoredDuringExecution:
+            nodeSelectorTerms:
+              - matchExpressions:
+                  - key: beta.kubernetes.io/arch
+                    operator: In
+                    values:
+                      - amd64
+                      - ppc64le
+                      - s390x
+      containers:
+        - args:
+            - proxy
+            - router
+            - --domain
+            - $(POD_NAMESPACE).svc.cluster.local
+            - --proxyLogLevel=warning
+            - --proxyComponentLogLevel=misc:error
+            - --log_output_level=default:info
+            - --serviceCluster
+            - egressgateway-ci01098420-idevgen-udkzift.$(POD_NAMESPACE)
+            - --trust-domain=cluster.local
+          env:
+            - name: JWT_POLICY
+              value: first-party-jwt
+            - name: PILOT_CERT_PROVIDER
+              value: istiod
+            - name: CA_ADDR
+              value: istiod-basic.ci01994970-idevgen-control-panel-synapse-ift.svc:15012
+            - name: NODE_NAME
+              valueFrom:
+                fieldRef:
+                  apiVersion: v1
+                  fieldPath: spec.nodeName
+            - name: POD_NAME
+              valueFrom:
+                fieldRef:
+                  apiVersion: v1
+                  fieldPath: metadata.name
+            - name: POD_NAMESPACE
+              valueFrom:
+                fieldRef:
+                  apiVersion: v1
+                  fieldPath: metadata.namespace
+            - name: INSTANCE_IP
+              valueFrom:
+                fieldRef:
+                  apiVersion: v1
+                  fieldPath: status.podIP
+            - name: HOST_IP
+              valueFrom:
+                fieldRef:
+                  apiVersion: v1
+                  fieldPath: status.hostIP
+            - name: SERVICE_ACCOUNT
+              valueFrom:
+                fieldRef:
+                  apiVersion: v1
+                  fieldPath: spec.serviceAccountName
+            - name: CANONICAL_SERVICE
+              valueFrom:
+                fieldRef:
+                  apiVersion: v1
+                  fieldPath: metadata.labels['service.istio.io/canonical-name']
+            - name: CANONICAL_REVISION
+              valueFrom:
+                fieldRef:
+                  apiVersion: v1
+                  fieldPath: metadata.labels['service.istio.io/canonical-revision']
+            - name: ISTIO_META_WORKLOAD_NAME
+              value: egressgateway-ci01098420-idevgen-udkzift
+            - name: ISTIO_META_OWNER
+              value: kubernetes://apis/apps/v1/namespaces/ci01098420-idevgen-udkzift/deployments/ingressgateway-ci01098420-idevgen-udkzift
+            - name: ISTIO_META_MESH_ID
+              value: cluster.local
+            - name: PROXY_CONFIG
+              value: |
+                {"discoveryAddress":"istiod-basic.ci01994970-idevgen-control-panel-synapse-ift.svc:15012","tracing":{"zipkin":{"address":"jaeger-collector.ci01994970-idevgen-control-panel-synapse-ift.svc:9411"},"tlsSettings":{"subjectAltNames":[]}},"proxyMetadata":{"DNS_AGENT":""}}
+            - name: ISTIO_META_ROUTER_MODE
+              value: sni-dnat
+            - name: ISTIO_META_CLUSTER_ID
+              value: Kubernetes
+          image: registry.redhat.io/openshift-service-mesh/proxyv2-rhel8@sha256:320f5bd35c208e00005c01ce0e83c8f05276119f273e9f881da950fdfff59a13
+          imagePullPolicy: Always
+          name: istio-proxy
+          readinessProbe:
+            failureThreshold: 30
+            httpGet:
+              path: /healthz/ready
+              port: 15021
+              scheme: HTTP
+            initialDelaySeconds: 1
+            periodSeconds: 2
+            successThreshold: 1
+            timeoutSeconds: 5
+          resources:
+            limits:
+              cpu: 600m
+              memory: 900Mi
+            requests:
+              cpu: 400m
+              memory: 700Mi
+          securityContext:
+            privileged: false
+            readOnlyRootFilesystem: true
+            runAsNonRoot: true
+          terminationMessagePath: /dev/termination-log
+          terminationMessagePolicy: File
+          volumeMounts:
+            - mountPath: /etc/istio/proxy
+              name: istio-envoy
+            - mountPath: /var/run/secrets/istio
+              name: istiod-ca-cert
+            - mountPath: /etc/istio/pod
+              name: podinfo
+            - mountPath: /etc/istio/egressgateway-certs-host
+              name: egressgateway-certs
+              readOnly: true
+            - mountPath: /etc/istio/egressgateway-ca-certs-host
+              name: egressgateway-ca-certs
+              readOnly: true
+            - mountPath: /mnt/ott-uds-socket
+              name: ott-uds-socket
+        - envFrom:
+            - secretRef:
+                name: synapse-lt-module-1-ott-passwords
+            - configMapRef:
+                name: synapse-lt-module-1-ott-settings
+          image: registry.delta.sbrf.ru/sigma/pprb/ci00641491/ci01125613_ott/ott-client-api@sha256:764085215941ecb7e90429326113fe63b78b024e8595ac3249c5d88d128574ac
+          imagePullPolicy: Always
+          name: ott-sidecar
+          readinessProbe:
+            failureThreshold: 30
+            httpGet:
+              path: /healthy
+              port: 8086
+              scheme: HTTP
+            initialDelaySeconds: 3
+            periodSeconds: 1
+            successThreshold: 1
+            timeoutSeconds: 3
+          resources:
+            limits:
+              cpu: 700m
+              memory: 900Mi
+            requests:
+              cpu: 500m
+              memory: 700Mi
+          securityContext:
+            privileged: false
+            readOnlyRootFilesystem: true
+            runAsNonRoot: true
+          volumeMounts:
+            - mountPath: /mnt/secrets
+              name: ott-certs
+              readOnly: true
+            - mountPath: /tmp/ott-logback
+              name: ott-logback
+              readOnly: true
+            - mountPath: /mnt/ott-uds-socket
+              name: ott-uds-socket
+            - mountPath: /tmp
+              name: tempdir
+      dnsPolicy: ClusterFirst
+      restartPolicy: Always
+      schedulerName: default-scheduler
+      securityContext: {}
+      serviceAccountName: default
+      terminationGracePeriodSeconds: 60
+      volumes:
+        - emptyDir: {}
+          name: istio-envoy
+        - emptyDir: {}
+          name: tempdir
+          defaultMode: 288
+        - configMap:
+            defaultMode: 256
+            name: istio-ca-root-cert
+          name: istiod-ca-cert
+        - downwardAPI:
+            defaultMode: 256
+            items:
+              - fieldRef:
+                  apiVersion: v1
+                  fieldPath: metadata.labels
+                path: labels
+              - fieldRef:
+                  apiVersion: v1
+                  fieldPath: metadata.annotations
+                path: annotations
+          name: podinfo
+        - name: egressgateway-certs
+          secret:
+            defaultMode: 256
+            optional: true
+            secretName: egressgateway-certs
+        - name: egressgateway-ca-certs
+          secret:
+            defaultMode: 256
+            optional: true
+            secretName: egressgateway-ca-certs
+        - configMap:
+            defaultMode: 256
+            name: ott-logback
+          name: ott-logback
+        - name: ott-certs
+          secret:
+            defaultMode: 256
+            secretName: synapse-lt-module-1-ott-certs
+        - emptyDir:
+            medium: Memory
+          name: ott-uds-socket
+---
+apiVersion: v1
+data:
+  ca-chain.cert.pem: LS0tLS1CRUdJTiBDRVJUSUZJQ0FURS0tLS0tDQpNSUlETnpDQ0FoK2dBd0lCQWdJVWNyV3oxT0QrcDlkVVNnOVk5NUw5QnpKNUYya3dEUVlKS29aSWh2Y05BUUVMDQpCUUF3S3pFUU1BNEdBMVVFQ2d3SFUzbHVZWEJ6WlRFWE1CVUdBMVVFQXd3T2MzbHRjR3hsTG5OaVpYSXVjblV3DQpIaGNOTWpFeE1qRXdNVFV6TXpJMVdoY05NekV3TWpJMk1UVXpNekkxV2pBck1SQXdEZ1lEVlFRS0RBZFRlVzVoDQpjSE5sTVJjd0ZRWURWUVFEREE1emVXMXdiR1V1YzJKbGNpNXlkVENDQVNJd0RRWUpLb1pJaHZjTkFRRUJCUUFEDQpnZ0VQQURDQ0FRb0NnZ0VCQUptTHVBd05OczJYRzVvNC9JaGZiN0VwM3NLK2N5UVFkMWNGdmRBL2U2OHZmUWwzDQpTYnAvK2tOOURtM2ZUS20rVkVoK2FKc1pleXJrWmVzMGZlRmg1UllSV1lReHFnQzRRYjI2NWJkRUdPT0w0TCtBDQpLQTFOWmJERFVPOExOWTRRZG5sdCtvdEtnbm5EOFhGNVBGSTIyTUhwRCtCZy9CcHZrcUFQNEN3bDVvV0FYWVdIDQoxaXV3Q3FYRmpIWlVnOFRFWWlKUGlxQmtuUXl2REdINkxKcGdoK3AxNlNuSExsU0NVbWNJeCtVMHJtenJWQkI4DQo5T2c0RjVROWlXSUE3SHN3YkViSWg5WG5IYmlXdGtnY2RWck5KNE9vdjVheS9HY1FnT1U0ZU1qWnNpYmMwa2Z6DQpTcnlOU3hIaXVCSWd6eGR6YllrNDZqM3Z5YWxMRU13dHJsdk51d2tDQXdFQUFhTlRNRkV3SFFZRFZSME9CQllFDQpGT05FZHRVZmlocGxZak5CcEhVSnJ5bm1qZEo2TUI4R0ExVWRJd1FZTUJhQUZPTkVkdFVmaWhwbFlqTkJwSFVKDQpyeW5tamRKNk1BOEdBMVVkRXdFQi93UUZNQU1CQWY4d0RRWUpLb1pJaHZjTkFRRUxCUUFEZ2dFQkFJeFVlSEFpDQppTHRTMVd3Ui9PNVplSC9icHoxWC9LZS9WOUlKYTZyVjJNTFhTQXY3N0cxOXRYVk05bjNRK2puaFkzTEk5Z2x3DQpXc255d21VVE96TGdQSll2R2R3bkptMmZFL0U3RnNuUnFsMWFHdVU3RjZvb2xyT3N3bi9ETUtlYXUzVUIvb1pkDQo0VUplbmNNQStCV2JmVDk4emFaZkI4L2F0R21EQ0JkQXBLbUpPdCswTytlaHU0SE1iRDAyMm5IVHg2eDdpbjYvDQo3K0NXc2IvZVZZZEtuZ2QrUmN0VUlBSUExZXNIS1FUQ29VcnJiL1AzcGRxSnIyWGoxS0tKNGNnWnQ4a1dDbmloDQo4YkZUWWVKSWZsZjBWVERkcnIvdFZtc1F0SStINExNVThjTVBqWnQ4MlVsYlBmU0s2MktnakNCZnc0dmh4eVNDDQpxWU5xYzJTNHowb1hPVnM9DQotLS0tLUVORCBDRVJUSUZJQ0FURS0tLS0tDQo=
+kind: Secret
+metadata:
+  labels:
+    template: egress-rman-nsi
+  name: egressgateway-ca-certs
+type: Opaque
+---
+apiVersion: v1
+data:
+  tls.crt: LS0tLS1CRUdJTiBDRVJUSUZJQ0FURS0tLS0tDQpNSUlFQ1RDQ0F2R2dBd0lCQWdJQkFEQU5CZ2txaGtpRzl3MEJBUXNGQURBck1SQXdEZ1lEVlFRS0RBZFRlVzVoDQpjSE5sTVJjd0ZRWURWUVFEREE1emVXMXdiR1V1YzJKbGNpNXlkVEFlRncweU1URXlNVEF4TlRNek16bGFGdzB5DQpPREEyTURFeE5UTXpNemxhTUdBeEN6QUpCZ05WQkFZVEFsSlZNUTh3RFFZRFZRUUlEQVpOYjNOamIzY3hEekFODQpCZ05WQkFjTUJrMXZjMk52ZHpFTk1Bc0dBMVVFQ2d3RVUySmxjakVnTUI0R0ExVUVBd3dYS2k1a1pYWXRaMlZ1DQpMbVJsYkhSaExuTmljbVl1Y25Vd2dnRWlNQTBHQ1NxR1NJYjNEUUVCQVFVQUE0SUJEd0F3Z2dFS0FvSUJBUURlDQpObUQ0bmpKTVFWN2JQeDh4OWYwTDV5MmJvV1NHZ3pkTzFQazJIc3FFa3p3NTJNbi83YUhjU1ROZjRKcklRejQ1DQpFc1FneVIxbkZPajVhb2U3aVJKbHNVQnQza2RQNWRnUmZ4ZGZyelo4dU9wQThuOWVpdGtZY3cwTnpzamdWVDg4DQpGZUwxSlB4aGhYSG8wNTYvNVNPSS9ueVdMcHB4RURxaEFVRWVjSTZmR0Y2b3BtcnpqMXk4SkZFaVVlQ0hraFJuDQpNdDFyOCt3T21tSWJMVU1oSkU3RTF1aGlMSEVDRExOOWIxMURFRUhuUDFMYzhnb2ZyYnpwbU5pVXpzSWh2QUlEDQpBOWFLK0hiTCtiNWtENlFXWno0c281R21KaThFbzBkOGoxYTI5dXY3ZmhUZ1dBcGhpNHoza05jclQ0SzBYZTc5DQo2MkRDWFgyUFRObUZkQ0NvY1FTaEFnTUJBQUdqZ2dFQk1JSCtNSUg3QmdOVkhSRUVnZk13Z2ZDQ0hDb3VZWEJ3DQpjeTVrWlhZdFoyVnVMbVJsYkhSaExuTmljbVl1Y25XQ0d5b3VjMmd4TG1SbGRpMW5aVzR1WkdWc2RHRXVjMkp5DQpaaTV5ZFlJYktpNXphREl1WkdWMkxXZGxiaTVrWld4MFlTNXpZbkptTG5KMWdoc3FMbk5vTXk1a1pYWXRaMlZ1DQpMbVJsYkhSaExuTmljbVl1Y25XQ0d5b3VjMmcwTG1SbGRpMW5aVzR1WkdWc2RHRXVjMkp5Wmk1eWRZSWJLaTV6DQphRFV1WkdWMkxXZGxiaTVrWld4MFlTNXpZbkptTG5KMWdpQXFMbVJsZGkxaGNIQnpMbTlqY0MxblpXOHVaR1ZzDQpkR0V1YzJKeVppNXlkWUlkS2k1a1pYWXRZWEJ3Y3k1dlkzQXRaMlZ2TG1OaExuTmljbVl1Y25Vd0RRWUpLb1pJDQpodmNOQVFFTEJRQURnZ0VCQUJzdk1penJ6QVM1dlhOWksxOTJuYmo0UjQxMktDaHJYRFNPSDI1MklEL2xKYys5DQo2QS85cmJoaitkYVRTU2c4d3FQUlIzVzhmQTB5Wm5NV3cxVUxhMjl4aWtySlFoVTFrTlJ2UXBHQTJJY05DY0RHDQpZTG52VXlNRi9DVVdyNWtGUVBZd0RLdVN6bUFHM0hFVlJ3ajJrS3U0VUpqSjVaM3FvZjlkTGpUTWU0QnJYZDR5DQpmSGJSMDdxc29ERFAzeHZuUTZaVVZUNG92eksxWlNCQlY1TzZPenpHRU8reUFVNEFPZlMrbVJYVmNyU2F0QWozDQpEK21ENWRyNFNBMmlXbHFhak9YL3RXRUlpZGJWUnpEUm4xZmw5bEhybXBjdG5Oczdhc1V6YytPSkF5OGZHV3JWDQp3eE9LL2xIVzlTcnJ6OFBXTXZGOEpyZDdkSXJuUDhRZ00rblMxYnc9DQotLS0tLUVORCBDRVJUSUZJQ0FURS0tLS0tDQo=
+  tls.key: LS0tLS1CRUdJTiBQUklWQVRFIEtFWS0tLS0tDQpNSUlFdmdJQkFEQU5CZ2txaGtpRzl3MEJBUUVGQUFTQ0JLZ3dnZ1NrQWdFQUFvSUJBUURlTm1ENG5qSk1RVjdiDQpQeDh4OWYwTDV5MmJvV1NHZ3pkTzFQazJIc3FFa3p3NTJNbi83YUhjU1ROZjRKcklRejQ1RXNRZ3lSMW5GT2o1DQphb2U3aVJKbHNVQnQza2RQNWRnUmZ4ZGZyelo4dU9wQThuOWVpdGtZY3cwTnpzamdWVDg4RmVMMUpQeGhoWEhvDQowNTYvNVNPSS9ueVdMcHB4RURxaEFVRWVjSTZmR0Y2b3BtcnpqMXk4SkZFaVVlQ0hraFJuTXQxcjgrd09tbUliDQpMVU1oSkU3RTF1aGlMSEVDRExOOWIxMURFRUhuUDFMYzhnb2ZyYnpwbU5pVXpzSWh2QUlEQTlhSytIYkwrYjVrDQpENlFXWno0c281R21KaThFbzBkOGoxYTI5dXY3ZmhUZ1dBcGhpNHoza05jclQ0SzBYZTc5NjJEQ1hYMlBUTm1GDQpkQ0NvY1FTaEFnTUJBQUVDZ2dFQkFNRGt2NFRSL3FPSFU0cEszdytGazZZVGhkbkZYZmdPUzZLWTZjUjdNaDJuDQptZTQxTEJTSCthdTV0MmtSRmd1bG80dnpxR0UxYzlxWm9pdHd1R2FvOUZsbVpxRjVCTHBzc1FWdko2RWQvZFNDDQp5SWFjZXNoZEMxdFg5QXI2YUJHa3JvSEFGZ1hybDFJb2Z0czNhR1QzeWNNUDlxSi96ZjA3czBrMFI0emU5RTlSDQpQMlBJUEtsWk9HdHhIUVp6ZVRaeTZxTHhEeU5YYWFXTk1rbGo4TEZpbk56WnNFMkEyUWQzdThKRU1ldm1JRUp5DQpKZEJIYVFMS3E1Yy9kYmdyV1pZODUvL1JjN2dCdk9Ka2xmUTBUZ3U5Q3M4OFh1KzlTRGptdHltRjdyV3NLRkV4DQovNTZBK3MyN0JQYVMyVkFsbnhUbHBXc28wbUhEUm5ZWGlLOXFUY25TRElrQ2dZRUEvZlF1YWxRSnVieFlqQWRCDQpVZi93eHRjazJ5d0VlUFRDV3dxN04wU1lnb2h6ZHVrOHlJbjVnNlUvd1Y5UGk0dyt2TkZFbU1JVXEyZUtIdGtwDQpvOUlEbjZpcUdXRWRsOGxIWE1wS1lmaDVMbWM4SDFzdVFtZlVXQytrbTJZRWJ1ek9CSmcxTmFOMVd2UVBEUkw5DQpSWk10UnZHcGY4ZU9veXNuZUI3eVJOSjdTaXNDZ1lFQTRBQzUxOWpIaU5NaHgzY3ozNkwyUS9PWUdnc2hndDFEDQpJcDU2ellPRjMvS3JITmQ1WVVkdGJuNEVWa0h4MmNSb0NiV2RuWWJmWDVCYWYrdDNHbmhuL3lkUzhqWDlPbnZ4DQozNXFJeTl2cFRGa0JRSzl4QnF6WnptZXZ2Sjk1elFoZ29LTCszdSttUjRpN2M2cExUL2tURnpFc2JPRWRkT0JEDQpPcmxSdHBnTkFtTUNnWUVBaFdoTktkWlQ5WnFYK1plbUhPbVRGeUhXWHJ6VTdLWEhwQVFUTFlsL2hMTWgxUW5aDQp3SSthNENsalFMWk5GMFhwZjA5LzlhK2ZKQndVVnZoR0E2VkQrZytrckFoMGYxUmhoTUZRS2Y5WnlhSzUxczhUDQpraGJ4V2hKTktzV0E5clMzMVhvUUdjbHcwUUw5RlNVd24rZ2RGUFBHMHpXR0hQbUNsbnZMVVpRdzZGa0NnWUFNDQpCLzN6V2ZGZHAvbG9mVDZNQkhTMXNaKzV4bDlHYUJ2ekFCQVllYmYzRDFHaGV2RktDRXdZWXl4WWRiSkh3QVRXDQpnS3EyaTBmMEdnekNVaU5UaUtRTlVFOWtNd0ltNGdGYndURVh3ZmdGNGNIdmQzemFudTRUNS8zSVk4aG0rc3cxDQoxSXRiN2dOQVZGZTlIcWhzNHpQalN3RFgyRDk4eDQ3VTJKOUs3MS9EZ1FLQmdBVUxoV2N0SngwQXFhZDdnMlhDDQpieWZPUmI3WDBnLys1d1JpckR6V3ZJWWswZjdXb0ZHNERhaXloR0R2bDJlK1FhbkYrV1pPcGxCZkc5MGV2cEtRDQpGdVFQNDBqS2xBWTJuVTUyYVUzSC90V1BlTjUzYXJhUGsrd1lpVU52VFQ5OEowYjlic3BOb3hJS0hITXJJckRTDQpYUHJlMHVVdWRHcFcxWEpkTEc4MXM4VkMNCi0tLS0tRU5EIFBSSVZBVEUgS0VZLS0tLS0NCg==
+kind: Secret
+metadata:
+  labels:
+    template: egress-rman-nsi
+  name: egressgateway-certs
+type: Opaque
+---
+apiVersion: networking.istio.io/v1alpha3
+kind: ServiceEntry
+metadata:
+  labels:
+    template: egress-rman-nsi
+  name: external-host-se
+spec:
+  exportTo:
+    - .
+  hosts:
+    - nsi-ift.dev-apps.ocp-geo.delta.sbrf.ru
+  ports:
+    - name: tls-443
+      number: 443
+      protocol: TLS
+    - name: http-7500
+      number: 7500
+      protocol: HTTP
+  resolution: DNS
+---
+apiVersion: networking.istio.io/v1alpha3
+kind: DestinationRule
+metadata:
+  labels:
+    template: egress-rman-nsi
+  name: external-host-dr
+spec:
+  exportTo:
+    - .
+  host: nsi-ift.dev-apps.ocp-geo.delta.sbrf.ru
+  trafficPolicy:
+    loadBalancer:
+      simple: ROUND_ROBIN
+    portLevelSettings:
+      - port:
+          number: 443
+        tls:
+          caCertificates: /etc/istio/egressgateway-ca-certs-host/ca-chain.cert.pem
+          clientCertificate: /etc/istio/egressgateway-certs-host/tls.crt
+          mode: MUTUAL
+          privateKey: /etc/istio/egressgateway-certs-host/tls.key
+          sni: nsi-ift.dev-apps.ocp-geo.delta.sbrf.ru
+---
+apiVersion: networking.istio.io/v1alpha3
+kind: Gateway
+metadata:
+  labels:
+    template: egress-rman-nsi
+  name: egressgateway-gw
+spec:
+  selector:
+    istio: egressgateway-ci01098420-idevgen-udkzift
+  servers:
+    - hosts:
+        - nsi-ift.dev-apps.ocp-geo.delta.sbrf.ru
+      port:
+        name: http-7000
+        number: 7000
+        protocol: HTTP
+---
+apiVersion: networking.istio.io/v1alpha3
+kind: VirtualService
+metadata:
+  labels:
+    template: egress-rman-nsi
+  name: external-host-vs
+spec:
+  exportTo:
+    - .
+  gateways:
+    - egressgateway-gw
+    - mesh
+  hosts:
+    - nsi-ift.dev-apps.ocp-geo.delta.sbrf.ru
+  http:
+    - match:
+        - gateways:
+            - mesh
+          port: 7500
+      rewrite:
+        authority: nsi-ift.dev-apps.ocp-geo.delta.sbrf.ru
+      route:
+        - destination:
+            host: egressgateway-svc
+            port:
+              number: 7000
+    - match:
+        - gateways:
+            - egressgateway-gw
+          port: 7000
+      rewrite:
+        authority: nsi-ift.dev-apps.ocp-geo.delta.sbrf.ru
+      route:
+        - destination:
+            host: nsi-ift.dev-apps.ocp-geo.delta.sbrf.ru
+            port:
+              number: 443
+---
+apiVersion: networking.istio.io/v1alpha3
+kind: EnvoyFilter
+metadata:
+  labels:
+    template: egress-rman-nsi
+  name: ott-egress-auth-filter
+spec:
+  configPatches:
+    - applyTo: HTTP_FILTER
+      match:
+        context: GATEWAY
+        listener:
+          filterChain:
+            filter:
+              name: envoy.http_connection_manager
+          portNumber: 7000
+      patch:
+        operation: INSERT_BEFORE
+        value:
+          config:
+            failure_mode_allow: false
+            grpc_service:
+              google_grpc:
+                stat_prefix: ext_authz
+                target_uri: unix:/mnt/ott-uds-socket/ott.socket
+              timeout: 2s
+            with_request_body:
+              allow_partial_message: true
+              max_request_bytes: 8192
+          name: envoy.ext_authz
+  workloadSelector:
+    labels:
+      app: egressgateway-ci01098420-idevgen-udkzift
+---
+apiVersion: v1
+data:
+  OTT_ANONYMOUS_REQUESTS_ENABLED: "false"
+  OTT_APPLICATION_ATTRIBUTE_ID: urn:sbrf:names:pprb:1.0:module:id
+  OTT_AUTHZ_REALM: ott
+  OTT_AUTHZ_VERSION: "1.0"
+  OTT_CERTSTORE_PATH: /mnt/secrets/synapse-lt-module-1.p12
+  OTT_CERTSTORE_TYPE: PKCS12
+  OTT_CLIENT_CERT_ALIAS: synapse-lt-module-1
+  OTT_CLIENT_DEFAULT_REALM: mmt
+  OTT_CLIENT_MMT-COMPATIBILITY-MODE: "false"
+  OTT_CLIENT_MMT_ACTION_ATTRID: urn:sbrf:names:pprb:1.0:action:id
+  OTT_CLIENT_MMT_RESOURCE_ATTRID: urn:sbrf:names:pprb:1.0:api:interface:fullname
+  OTT_GRPC_PORT: /mnt/ott-uds-socket/ott.socket
+  OTT_HTTP_PORT: "8086"
+  OTT_MODULE_ID: Synapse-LT-Module-1
+  OTT_OPER_MODE: sign
+  OTT_SERVICE_CERT_ALIAS: ott-service
+  OTT_SERVICE_HOSTS: 10.106.168.51:8080,10.106.168.54:8080,10.106.168.86:8080,10.106.169.172:8080
+  OTT_SERVICE_URL: http://10.106.168.51:8080/ott-service/rest/token
+  OTT_TRUST_STORE_PATH: /mnt/secrets/ott_service_truststore.p12
+kind: ConfigMap
+metadata:
+  labels:
+    template: egress-rman-nsi
+  name: synapse-lt-module-1-ott-settings
+---
+apiVersion: v1
+data:
+  OTT_CERTSTORE_PRIVATE_KEY_PWD: cXdlcjEyMzQ=
+  OTT_CERTSTORE_PWD: cXdlcjEyMzQ=
+  OTT_TRUST_STORE_PWD: MTIzNDU2
+kind: Secret
+metadata:
+  labels:
+    template: egress-rman-nsi
+  name: synapse-lt-module-1-ott-passwords
+type: Opaque
+---
+apiVersion: v1
+data:
+  ott_service_truststore.p12: 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
+  synapse-lt-module-1.p12: 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
+kind: Secret
+metadata:
+  labels:
+    template: egress-rman-nsi
+  name: synapse-lt-module-1-ott-certs
+type: Opaque
+---
+apiVersion: v1
+data:
+  logback.xml: |
+    <?xml version="1.0" encoding="UTF-8"?>
+    <configuration scan="true" scanPeriod="60 seconds">
+        <appender name="STDOUT" class="ch.qos.logback.core.ConsoleAppender">
+            <encoder>
+                <pattern>%X{ott.req.id} %d{HH:mm:ss.SSS} [%-5level] [%logger{36}] [%thread] - %msg%n</pattern>
+            </encoder>
+        </appender>
+        <appender name="FILE" class="ch.qos.logback.core.FileAppender">
+            <file>/tmp/OttTest.log</file>
+            <append>false</append>
+            <encoder>
+                <pattern>%X{ott.req.id} %d{HH:mm:ss.SSS} [%-5level] [%logger{36}] [%thread] - %msg%n</pattern>
+            </encoder>
+        </appender>
+        <root level="info">
+            <appender-ref ref="STDOUT"/>
+            <appender-ref ref="FILE"/>
+        </root>
+        <logger name="com.sbt.ott" level="info"/>
+        <logger name="com.sbt.ott.api.rest" level="info"/>
+        <logger name="com.sbt.core" level="info"/>
+        <logger name="com.fasterxml" level="info"/>
+    </configuration>
+kind: ConfigMap
+metadata:
+  labels:
+    template: egress-rman-nsi
+  name: ott-logback

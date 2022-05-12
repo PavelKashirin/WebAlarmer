@@ -1,0 +1,163 @@
+apiVersion: apps.openshift.io/v1
+kind: DeploymentConfig
+metadata:
+  labels:
+    ts: "unimon"
+    app: "unimon-sender-${distrib.release.version}"
+    artifact: "unimon-sender-${distrib.release.version}"
+    app-group: "unimon-sender"
+    version: "D-03.000.00-1192_client"       # название Docker-образа (как правило, это имя FP), нужно изменить на свое;
+  name: 'unimon-sender-${distrib.release.version}'                # название DeploymentConfig (как правило, это имя FP), нужно изменить на свое;
+spec:
+  replicas: ${unimon-sender.openshift.autoscaling.minReplicas}
+  selector:
+    app: "unimon-sender-${distrib.release.version}"
+    artifact: "unimon-sender-${distrib.release.version}"
+    version: "D-03.000.00-1192_client"                    #это необходимо для логик работы скриптов развертывания
+  strategy:
+    activeDeadlineSeconds: 21600
+    resources: { }
+    rollingParams:
+      intervalSeconds: 1
+      maxSurge: 25%
+      maxUnavailable: 25%
+      timeoutSeconds: 600
+      updatePeriodSeconds: 1
+    type: Rolling
+  template:
+    metadata:
+      labels:
+        app: "unimon-sender-${distrib.release.version}"
+        artifact: "unimon-sender-${distrib.release.version}"
+        version: "D-03.000.00-1192_client"            #это необходимо для логик работы скриптов развертывания и чтобы OpenShift мог связать создаваемые POD'ы с данным конфигом деплоя (типа лейблы здесь и в секции выше одинаковые)
+        unimonId: "${unimon-sender.unimonId}"
+      annotations:
+        sidecar.istio.io/inject: "${unimon-sender.sidecar.istio.inject}"
+        sidecar.istio.io/rewriteAppHTTPProbers: '${unimon-sender.sidecar.istio.rewriteAppHTTPProbers}'
+        traffic.sidecar.istio.io/excludeOutboundPorts: '${unimon-sender.sidecar.istio.exclude.outbound.ports}'
+    spec:
+      dnsPolicy: ClusterFirst
+      restartPolicy: Always
+      volumes:
+        - name: "unimon-sender-kafka-certs-secret"
+          secret:
+            secretName: "${KAFKA_CERTS_SECRET_NAME}"
+        - name: "unimon-sender-logback-config"
+          configMap:
+            name: "unimon-sender-logback-config.${distrib.release.version}"
+            defaultMode: 420
+        - name: "logs-share"
+          emptyDir: { }
+        - name: "unimon-sender-logger-files-config"
+          configMap:
+            name: "unimon-sender-logger-files-config.${distrib.release.version}"
+            defaultMode: 420
+        - name: "fluent-bit-config"
+          emptyDir: { }
+
+      securityContext:
+        runAsNonRoot: true
+      terminationGracePeriodSeconds: 30
+      containers:
+        - image: "${docker.registry.proxy}/ci02587203/ci02809205_tengri/unimon-sender@sha256:5839b943267b6a31bec14d2ca45661b5c3e83194948416013f7bbd01f39026e8"
+          name: unimon-sender                                    # название Docker-образа (как правило, это имя FP), нужно изменить на свое;
+          securityContext:
+            runAsNonRoot: true
+          envFrom:
+            - configMapRef:
+                name: ufs-monitoring.unimon-sender.conf.r3
+          env:
+            - name: SPRING_PROFILES_ACTIVE
+              value: PROM
+            - name: "KAFKA_SSL_TRUSTSTORE_PASSWORD"
+              valueFrom:
+                secretKeyRef:
+                  name: "${KAFKA_PASSWORDS_SECRET_NAME}"
+                  key: "${KAFKA_SSL_TRUSTSTORE_PASSWORD_KEY}"
+            - name: "KAFKA_SSL_KEYSTORE_PASSWORD"
+              valueFrom:
+                secretKeyRef:
+                  name: "${KAFKA_PASSWORDS_SECRET_NAME}"
+                  key: "${KAFKA_SSL_KEYSTORE_PASSWORD_KEY}"
+          imagePullPolicy: Always
+          ports:
+            - containerPort: 8080
+              protocol: TCP
+            - containerPort: 8081
+              protocol: TCP
+          livenessProbe:
+            failureThreshold: 15
+            httpGet:
+              path: /actuator/health/liveness
+              port: 8081
+              scheme: HTTP
+            initialDelaySeconds: 20
+            periodSeconds: 10
+            successThreshold: 1
+            timeoutSeconds: 10
+          readinessProbe:
+            failureThreshold: 15
+            httpGet:
+              path: /actuator/health/readiness
+              port: 8081
+              scheme: HTTP
+            initialDelaySeconds: 30
+            periodSeconds: 10
+            successThreshold: 1
+            timeoutSeconds: 10
+          resources:
+            limits:
+              cpu: 680m
+              memory: 1000Mi
+            requests:
+              cpu: 200m
+              memory: 1000Mi
+          terminationMessagePath: /dev/termination-log
+          volumeMounts:
+            - name: "unimon-sender-kafka-certs-secret"
+              mountPath: "/certificates"
+            - name: "logs-share"
+              mountPath: "/var/log/unimon-sender-log"
+            - name: "unimon-sender-logback-config"
+              mountPath: "/etc/unimon-sender"
+        - name: logger-forwarder-sidecar
+          image: "${docker.registry.proxy}/ci02587203/ci02809205_tengri/fluent-bit@sha256:b936f6ee378b733214b110b70c18a2ee68175d874bddf65f2c85daf9ffc6f879"
+          resources:
+            limits:
+              memory: 200Mi
+              cpu: 300m
+            requests:
+              memory: 100Mi
+              cpu: 150m
+          env:
+            - name: NODE
+              valueFrom:
+                fieldRef:
+                  fieldPath: spec.nodeName
+            - name: POD
+              valueFrom:
+                fieldRef:
+                  apiVersion: v1
+                  fieldPath: metadata.name
+            - name: NAMESPACE
+              valueFrom:
+                fieldRef:
+                  apiVersion: v1
+                  fieldPath: metadata.namespace
+
+          volumeMounts:
+            - name: "logs-share"
+              mountPath: /var/log/unimon-sender-log
+            - name: "unimon-sender-logger-files-config"
+              mountPath: /fluent-bit/configmap
+            - name: "fluent-bit-config"
+              mountPath: /fluent-bit/etc
+
+          command:
+            - sh
+            - '-c'
+            - sed 's/%{/${/g' /fluent-bit/configmap/fluent-bit.conf > /fluent-bit/etc/fluent-bit.conf;
+              cp /fluent-bit/configmap/parsers.conf /fluent-bit/etc/parsers.conf;
+              ${logger.fluent-bit.docker.executable.file.path} -c /fluent-bit/etc/fluent-bit.conf
+  triggers:
+    - type: ConfigChange

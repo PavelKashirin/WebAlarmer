@@ -1,0 +1,66 @@
+############## UNIMON ##############
+
+apiVersion: networking.istio.io/v1alpha3
+kind: ServiceEntry
+metadata:
+  name: egressgateway-logger-monitoring-${distrib.release.version}
+spec:
+  exportTo:
+    - .
+  hosts:
+    - ${logger.pprb.host}
+  location: MESH_EXTERNAL
+  ports:
+    - name: http-80
+      number: 80
+      protocol: HTTP
+    - name: https-443
+      number: 443
+      protocol: HTTPS
+  resolution: DNS
+---
+apiVersion: networking.istio.io/v1alpha3
+kind: ServiceEntry
+metadata:
+  name: egressgateway-kafka-monitoring-${distrib.release.version}
+  labels:
+    app-group: "unimon-egress"
+spec:
+  exportTo:
+    - .
+  hosts:
+    - kafka-hosts-${projectName}
+  ports:
+    - name: tcp-kafka
+      number: ${KAFKA_BROKER_PORT}
+      protocol: TCP
+  location: MESH_EXTERNAL
+  resolution: NONE
+---
+apiVersion: networking.istio.io/v1alpha3
+kind: ServiceEntry
+metadata:
+  name: egressgateway-kubernetes-monitoring-${distrib.release.version}
+spec:
+  addresses:
+    - ${kubernetes_address}
+  endpoints:
+    - address: ${kubernetes_address}
+  exportTo:
+    - .
+  hosts:
+    - kubernetes-${projectName}
+  location: MESH_EXTERNAL
+  ports:
+    - name: https-443
+      number: 443
+      protocol: HTTPS
+  resolution: STATIC
+
+parameters:
+  - name: projectName
+    required: true
+    value: 'ci01098420-idevgen-allowanceift'
+  - name: kubernetes_address
+    required: true
+    value: '172.30.0.1'

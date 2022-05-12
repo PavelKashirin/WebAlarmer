@@ -1,0 +1,15 @@
+oc create secret generic secretName --from-file=published.pem --from-file=chain_pem.txt --from-file=tengry_allo_ift.key
+
+oc process -f logger-endpoint-template.yml --param-file=params.conf | oc create -f - 
+
+oc process -f egress-https-ott-patch-template.yml --param-file=Template.env --ignore-unknown-parameters=true | oc create -f - 
+
+oc create secret generic logger-control-plane-app-opts-secret --from-literal=secretAppOpts=”-Dspring.datasource.password=<secret> -Dtengri.api.password=<secret> -Dclipas.secret_key=<secret>” --type=Opaque
+
+oc create secret generic geo-istio-ingressgateway-certs --from-file=tls.key=ingress_ci01098420_PSI.key --from-file=tls.crt=ingress-published-psi.crt --dry-run -o yaml > geo-istio-ingressgateway-certs.yaml
+
+oc process -f unimon-agent-template.yaml --param-file=os_props.conf --ignore-unknown-parameters=true > unimon-agent.yaml
+
+oc process -f unimon-sender-template.yaml --param-file=os_props.conf --ignore-unknown-parameters=true | oc create -f -
+
+

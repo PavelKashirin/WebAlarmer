@@ -1,0 +1,43 @@
+oc create secret generic test --from-file=1.crt --from-file=2.crt --from-file=3.crt
+
+- name: tempdir
+  mountPath: /tmp
+
+- name: tempdir
+  emptyDir: {}
+  defaultMode: 288
+
+keytool -list -keystore ott_truststore.p12 -storepass 79Vbythfkrf -v
+keytool -list -keystore allo_app.p12 -storepass 79Vbythfkrf
+
+keytool -list -keystore rmans_app.p12 -storepass 79Vbythfkrf -v
+
+keytool -list -keystore iftt_ott_public.p12 -storepass 123456
+
+keytool -list -keystore rmans_app.p12 -storepass 79Vbythfkrf
+
+keytool -list -keystore ottt.p12 -storepass 123456
+
+keytool -list -keystore rmansc.jks -storepass 79Vbythfkrf -v
+
+keytool -exportcert -alias rmansC -keystore rmansc.jks -file result.pem.txt
+
+keytool -importkeystore \
+    -srckeystore rmansc.jks \
+    -destkeystore keystore_result.p12 \
+    -deststoretype PKCS12 \
+    -srcalias rmansC \
+    -deststorepass 79Vbythfkrf \
+    -destkeypass 79Vbythfkrf
+
+keytool -list -keystore keystore_result.p12 -storepass 79Vbythfkrf
+
+openssl pkcs12 -in keystore_result.p12  -nodes -nocerts -out key_result.pem
+
+
+Создание хранилища ключей формата jks из хранилища ключей формата pkcs12
+
+keytool -import -keystore rmans_app.p12 -storetype PKCS12 -file rmans_app.pem -alias rmans_app -storepass 79Vbythfkrf
+
+keytool -list -keystore rmans_app.jks -storepass 79Vbythfkrf
+keytool -importkeystore -srckeystore rmans_app.p12 -srcstoretype PKCS12 -destkeystore rmans_app.jks -deststoretype JKS -srcstorepass 79Vbythfkrf -deststorepass 79Vbythfkrf -srcalias rmans_app -destalias rmans_app -srckeypass 79Vbythfkrf -destkeypass 79Vbythfkrf -noprompt

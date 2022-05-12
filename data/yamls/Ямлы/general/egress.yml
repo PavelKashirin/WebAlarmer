@@ -1,0 +1,1105 @@
+apiVersion: v1
+kind: Template
+labels:
+  template: ${APP_NAME}
+metadata:
+  name: egress
+objects:
+## При добавлении нового приложения, не забудь открыть порт в сервисе egress
+## COMMON EGRESS OBJECTS
+- apiVersion: v1
+  kind: Service
+  metadata:
+    name: egressgateway-svc
+  spec:
+    ports:
+      - name: tcp-9898
+        port: 9898
+      - name: tcp-9897
+        port: 9897
+      - name: tcp-9896
+        port: 9896
+        # NSI
+      - name: http-${EGRESS_PORT_NSI}
+        port: ${{EGRESS_PORT_NSI}}
+        # UCP
+      - name: http-${EGRESS_PORT_UCP}
+        port: ${{EGRESS_PORT_UCP}}
+        # AUDIT
+      - name: http-${EGRESS_PORT_AUDIT}
+        port: ${{EGRESS_PORT_AUDIT}}
+        # INGRESS ALLO-IFT
+      - name: http-${EGRESS_PORT_ALLO}
+        port: ${{EGRESS_PORT_ALLO}}
+        # RATES
+      - name: http-${EGRESS_PORT_RATES}
+        port: ${{EGRESS_PORT_RATES}}
+    selector:
+      app: egressgateway-${PROJECT_NAME}
+      istio: egressgateway-${PROJECT_NAME}
+- apiVersion: apps/v1
+  kind: Deployment
+  metadata:
+    labels:
+      app: egressgateway-${PROJECT_NAME}
+      app.kubernetes.io/component: gateways
+      app.kubernetes.io/instance: ${ISTIO_CONTROL_PLANE}
+      app.kubernetes.io/name: gateways
+      app.kubernetes.io/part-of: istio
+      chart: gateways
+      heritage: Tiller
+      istio: egressgateway-${PROJECT_NAME}
+      release: istio
+    name: egressgateway-${PROJECT_NAME}
+  spec:
+    progressDeadlineSeconds: 1200
+    replicas: 1
+    revisionHistoryLimit: 10
+    selector:
+      matchLabels:
+        app: egressgateway-${PROJECT_NAME}
+        istio: egressgateway-${PROJECT_NAME}
+    strategy:
+      rollingUpdate:
+        maxSurge: 1
+        maxUnavailable: 1
+      type: RollingUpdate
+    template:
+      metadata:
+        annotations:
+          sidecar.istio.io/inject: "false"
+        creationTimestamp: null
+        labels:
+          app: egressgateway-${PROJECT_NAME}
+          chart: gateways
+          heritage: Tiller
+          istio: egressgateway-${PROJECT_NAME}
+          release: istio
+      spec:
+        affinity:
+          nodeAffinity:
+            preferredDuringSchedulingIgnoredDuringExecution:
+            - preference:
+                matchExpressions:
+                - key: beta.kubernetes.io/arch
+                  operator: In
+                  values:
+                  - amd64
+              weight: 2
+            - preference:
+                matchExpressions:
+                - key: beta.kubernetes.io/arch
+                  operator: In
+                  values:
+                  - ppc64le
+              weight: 2
+            - preference:
+                matchExpressions:
+                - key: beta.kubernetes.io/arch
+                  operator: In
+                  values:
+                  - s390x
+              weight: 2
+            requiredDuringSchedulingIgnoredDuringExecution:
+              nodeSelectorTerms:
+              - matchExpressions:
+                - key: beta.kubernetes.io/arch
+                  operator: In
+                  values:
+                  - amd64
+                  - ppc64le
+                  - s390x
+          podAntiAffinity:
+            preferredDuringSchedulingIgnoredDuringExecution:
+            - podAffinityTerm:
+                labelSelector:
+                  matchExpressions:
+                  - key: app
+                    operator: In
+                    values:
+                    - egressgateway-${PROJECT_NAME}
+                topologyKey: kubernetes.io/hostname
+              weight: 1
+        containers:
+        - args:
+          - proxy
+          - router
+          - --domain
+          - $(POD_NAMESPACE).svc.cluster.local
+          - --proxyLogLevel=warning
+          - --proxyComponentLogLevel=misc:error
+          - --log_output_level=default:info
+          - --serviceCluster
+          - egressgateway-${PROJECT_NAME}.$(POD_NAMESPACE)
+          - --trust-domain=cluster.local
+          env:
+          - name: JWT_POLICY
+            value: first-party-jwt
+          - name: PILOT_CERT_PROVIDER
+            value: istiod
+          - name: CA_ADDR
+            value: istiod-basic.${ISTIO_CONTROL_PLANE}.svc:15012
+          - name: NODE_NAME
+            valueFrom:
+              fieldRef:
+                apiVersion: v1
+                fieldPath: spec.nodeName
+          - name: POD_NAME
+            valueFrom:
+              fieldRef:
+                apiVersion: v1
+                fieldPath: metadata.name
+          - name: POD_NAMESPACE
+            valueFrom:
+              fieldRef:
+                apiVersion: v1
+                fieldPath: metadata.namespace
+          - name: INSTANCE_IP
+            valueFrom:
+              fieldRef:
+                apiVersion: v1
+                fieldPath: status.podIP
+          - name: HOST_IP
+            valueFrom:
+              fieldRef:
+                apiVersion: v1
+                fieldPath: status.hostIP
+          - name: SERVICE_ACCOUNT
+            valueFrom:
+              fieldRef:
+                apiVersion: v1
+                fieldPath: spec.serviceAccountName
+          - name: CANONICAL_SERVICE
+            valueFrom:
+              fieldRef:
+                apiVersion: v1
+                fieldPath: metadata.labels['service.istio.io/canonical-name']
+          - name: CANONICAL_REVISION
+            valueFrom:
+              fieldRef:
+                apiVersion: v1
+                fieldPath: metadata.labels['service.istio.io/canonical-revision']
+          - name: ISTIO_META_WORKLOAD_NAME
+            value: egressgateway-${PROJECT_NAME}
+          - name: ISTIO_META_OWNER
+            value: kubernetes://apis/apps/v1/namespaces/${PROJECT_NAME}/deployments/ingressgateway-${PROJECT_NAME}
+          - name: ISTIO_META_MESH_ID
+            value: cluster.local
+          - name: PROXY_CONFIG
+            value: |
+              {"discoveryAddress":"istiod-basic.${ISTIO_CONTROL_PLANE}.svc:15012","tracing":{"zipkin":{"address":"jaeger-collector.${ISTIO_CONTROL_PLANE}.svc:9411"},"tlsSettings":{"subjectAltNames":[]}},"proxyMetadata":{"DNS_AGENT":""}}
+          - name: ISTIO_META_ROUTER_MODE
+            value: sni-dnat
+          - name: ISTIO_META_CLUSTER_ID
+            value: Kubernetes
+          image: ${PROXY_IMAGE}
+          imagePullPolicy: Always
+          name: istio-proxy
+          readinessProbe:
+            failureThreshold: 30
+            httpGet:
+              path: /healthz/ready
+              port: 15021
+              scheme: HTTP
+            initialDelaySeconds: 1
+            periodSeconds: 2
+            successThreshold: 1
+            timeoutSeconds: 5
+          resources:
+            limits:
+              cpu: 600m
+              memory: 900Mi
+            requests:
+              cpu: 400m
+              memory: 700Mi
+          securityContext:
+            privileged: false
+            readOnlyRootFilesystem: true
+            runAsNonRoot: true
+          terminationMessagePath: /dev/termination-log
+          terminationMessagePolicy: File
+          volumeMounts:
+          - mountPath: /etc/istio/proxy
+            name: istio-envoy
+          - mountPath: /var/run/secrets/istio
+            name: istiod-ca-cert
+          - mountPath: /etc/istio/pod
+            name: podinfo
+          - mountPath: /etc/istio/egressgateway-certs-host
+            name: egressgateway-certs
+            readOnly: true
+          - mountPath: /etc/istio/egressgateway-ca-certs-host
+            name: egressgateway-ca-certs
+            readOnly: true
+          - mountPath: /mnt/ott-uds-socket
+            name: ott-uds-socket
+          - mountPath: /tmp
+            name: tempdir
+        - envFrom:
+          - secretRef:
+              name: synapse-lt-module-1-ott-passwords
+          - configMapRef:
+              name: synapse-lt-module-1-ott-settings
+          image: ${OTT_IMAGE}
+          imagePullPolicy: Always
+          name: ott-sidecar
+          readinessProbe:
+            failureThreshold: 30
+            httpGet:
+              path: /healthy
+              port: 8086
+              scheme: HTTP
+            initialDelaySeconds: 3
+            periodSeconds: 1
+            successThreshold: 1
+            timeoutSeconds: 3
+          resources:
+            limits:
+              cpu: 700m
+              memory: 900Mi
+            requests:
+              cpu: 500m
+              memory: 700Mi
+          securityContext:
+            privileged: false
+            readOnlyRootFilesystem: true
+            runAsNonRoot: true
+          volumeMounts:
+          - mountPath: /mnt/secrets
+            name: ott-certs
+            readOnly: true
+          - mountPath: /tmp/ott-logback
+            name: ott-logback
+            readOnly: true
+          - mountPath: /mnt/ott-uds-socket
+            name: ott-uds-socket
+          - mountPath: /tmp
+            name: tempdir
+        dnsPolicy: ClusterFirst
+        restartPolicy: Always
+        schedulerName: default-scheduler
+        securityContext: {}
+        serviceAccountName: default
+        terminationGracePeriodSeconds: 60
+        volumes:
+        - emptyDir: {}
+          name: istio-envoy
+        - emptyDir: {}
+          name: tempdir
+          defaultMode: 288
+        - configMap:
+            defaultMode: 256
+            name: istio-ca-root-cert
+          name: istiod-ca-cert
+        - downwardAPI:
+            defaultMode: 256
+            items:
+            - fieldRef:
+                apiVersion: v1
+                fieldPath: metadata.labels
+              path: labels
+            - fieldRef:
+                apiVersion: v1
+                fieldPath: metadata.annotations
+              path: annotations
+          name: podinfo
+        - name: egressgateway-certs
+          secret:
+            defaultMode: 256
+            optional: true
+            secretName: egressgateway-certs
+        - name: egressgateway-ca-certs
+          secret:
+            defaultMode: 256
+            optional: true
+            secretName: egressgateway-ca-certs
+        - configMap:
+            defaultMode: 256
+            name: ott-logback
+          name: ott-logback
+        - name: ott-certs
+          secret:
+            defaultMode: 256
+            secretName: synapse-lt-module-1-ott-certs
+        - emptyDir:
+            medium: Memory
+          name: ott-uds-socket
+- apiVersion: v1
+  data:
+    ca-chain.cert.pem: ${EGRESS_CA_CERT}
+  kind: Secret
+  metadata:
+    name: egressgateway-ca-certs
+  type: Opaque
+- apiVersion: v1
+  data:
+    tls.crt: ${EGRESS_CERTS_CRT}
+    tls.key: ${EGRESS_CERTS_KEY}
+  kind: Secret
+  metadata:
+    name: egressgateway-certs
+  type: Opaque
+- apiVersion: v1
+  data:
+    OTT_ANONYMOUS_REQUESTS_ENABLED: "false"
+    OTT_APPLICATION_ATTRIBUTE_ID: urn:sbrf:names:pprb:1.0:module:id
+    OTT_AUTHZ_REALM: ott
+    OTT_AUTHZ_VERSION: "1.0"
+    OTT_CERTSTORE_PATH: /mnt/secrets/synapse-lt-module-1.p12
+    OTT_CERTSTORE_TYPE: PKCS12
+    OTT_CLIENT_CERT_ALIAS: rmans_app
+#    OTT_CLIENT_CERT_ALIAS: synapse-lt-module-1
+    OTT_CLIENT_DEFAULT_REALM: mmt
+    OTT_CLIENT_MMT-COMPATIBILITY-MODE: "false"
+    OTT_CLIENT_MMT_ACTION_ATTRID: urn:sbrf:names:pprb:1.0:action:id
+    OTT_CLIENT_MMT_RESOURCE_ATTRID: urn:sbrf:names:pprb:1.0:api:interface:fullname
+    OTT_GRPC_PORT: /mnt/ott-uds-socket/ott.socket
+    OTT_HTTP_PORT: "8086"
+    OTT_MODULE_ID: rmans_app
+#    OTT_MODULE_ID: Synapse-LT-Module-1
+    OTT_OPER_MODE: sign
+    OTT_SERVICE_CERT_ALIAS: ott-service
+
+    OTT_SERVICE_HOSTS: '10.53.13.110:8443,10.53.13.111:8443,10.53.51.160:8443'
+#    OTT_SERVICE_HOSTS: '10.53.13.110:8443,10.53.13.111:8443,10.53.51.147:8443,10.53.51.160:8443'
+#    OTT_SERVICE_HOSTS: 10.106.168.51:8080,10.106.168.54:8080,10.106.168.86:8080,10.106.169.172:8080
+    OTT_SERVICE_URL: https://host:port/ott-service/rest/token
+#    OTT_SERVICE_URL: http://10.106.168.51:8080/ott-service/rest/token
+
+    OTT_TRUST_STORE_PATH: /mnt/secrets/ott_service_truststore.p12
+  kind: ConfigMap
+  metadata:
+    name: synapse-lt-module-1-ott-settings
+- apiVersion: v1
+  data:
+    OTT_CERTSTORE_PRIVATE_KEY_PWD: NzlWYnl0aGZrcmY=
+#    OTT_CERTSTORE_PRIVATE_KEY_PWD: cXdlcjEyMzQ=
+    OTT_CERTSTORE_PWD: NzlWYnl0aGZrcmY=
+#    OTT_CERTSTORE_PWD: cXdlcjEyMzQ=
+    OTT_TRUST_STORE_PWD: MTIzNDU2
+  kind: Secret
+  metadata:
+    name: synapse-lt-module-1-ott-passwords
+  type: Opaque
+- apiVersion: v1
+  data:
+    ott_service_truststore.p12: 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
+#    ott_service_truststore.p12: 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
+    synapse-lt-module-1.p12: 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
+#    synapse-lt-module-1.p12: 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
+  kind: Secret
+  metadata:
+    name: synapse-lt-module-1-ott-certs
+  type: Opaque
+- apiVersion: v1
+  data:
+    logback.xml: |
+      <?xml version="1.0" encoding="UTF-8"?>
+      <configuration scan="true" scanPeriod="60 seconds">
+          <appender name="STDOUT" class="ch.qos.logback.core.ConsoleAppender">
+              <encoder>
+                  <pattern>%X{ott.req.id} %d{HH:mm:ss.SSS} [%-5level] [%logger{36}] [%thread] - %msg%n</pattern>
+              </encoder>
+          </appender>
+          <appender name="FILE" class="ch.qos.logback.core.FileAppender">
+              <file>/tmp/OttTest.log</file>
+              <append>false</append>
+              <encoder>
+                  <pattern>%X{ott.req.id} %d{HH:mm:ss.SSS} [%-5level] [%logger{36}] [%thread] - %msg%n</pattern>
+              </encoder>
+          </appender>
+          <root level="info">
+              <appender-ref ref="STDOUT"/>
+              <appender-ref ref="FILE"/>
+          </root>
+          <logger name="com.sbt.ott" level="info"/>
+          <logger name="com.sbt.ott.api.rest" level="info"/>
+          <logger name="com.sbt.core" level="info"/>
+          <logger name="com.fasterxml" level="info"/>
+      </configuration>
+  kind: ConfigMap
+  metadata:
+    name: ott-logback
+
+## NSI EGRESS OBJECTS
+- apiVersion: networking.istio.io/v1alpha3
+  kind: ServiceEntry
+  metadata:
+    name: external-${INTEGRATION_MODULE_NSI}-host${EXTERNAL_HOST_NSI_NUMBER}-se
+  spec:
+    exportTo:
+      - .
+    hosts:
+      - ${EXTERNAL_HOST_NSI}
+    ports:
+      - name: tls-${EXTERNAL_PORT_NSI}
+        number: ${{EXTERNAL_PORT_NSI}}
+        protocol: TLS
+      - name: http-${EXTERNAL_PORT_MESH_NSI}
+        number: ${{EXTERNAL_PORT_MESH_NSI}}
+        protocol: HTTP
+    resolution: DNS
+- apiVersion: networking.istio.io/v1alpha3
+  kind: DestinationRule
+  metadata:
+    name: external-${INTEGRATION_MODULE_NSI}-host${EXTERNAL_HOST_NSI_NUMBER}-dr
+  spec:
+    exportTo:
+      - .
+    host: ${EXTERNAL_HOST_NSI}
+    trafficPolicy:
+      loadBalancer:
+        simple: ROUND_ROBIN
+      portLevelSettings:
+        - port:
+            number: ${{EXTERNAL_PORT_NSI}}
+          tls:
+            caCertificates: /etc/istio/egressgateway-ca-certs-host${EXTERNAL_HOST_NSI_NUMBER}/ca-chain.cert.pem
+            clientCertificate: /etc/istio/egressgateway-certs-host${EXTERNAL_HOST_NSI_NUMBER}/tls.crt
+            mode: MUTUAL
+            privateKey: /etc/istio/egressgateway-certs-host${EXTERNAL_HOST_NSI_NUMBER}/tls.key
+            sni: ${EXTERNAL_HOST_NSI}
+- apiVersion: networking.istio.io/v1alpha3
+  kind: Gateway
+  metadata:
+    name: egressgateway-${INTEGRATION_MODULE_NSI}-${EXTERNAL_HOST_NSI_NUMBER}-gw
+  spec:
+    selector:
+      istio: egressgateway-${PROJECT_NAME}
+    servers:
+      - hosts:
+          - ${EXTERNAL_HOST_NSI}
+        port:
+          name: http-${EGRESS_PORT_NSI}
+          number: ${{EGRESS_PORT_NSI}}
+          protocol: HTTP
+- apiVersion: networking.istio.io/v1alpha3
+  kind: VirtualService
+  metadata:
+    name: external-${INTEGRATION_MODULE_NSI}-host${EXTERNAL_HOST_NSI_NUMBER}-vs
+  spec:
+    exportTo:
+      - .
+    gateways:
+      - egressgateway-${INTEGRATION_MODULE_NSI}-${EXTERNAL_HOST_NSI_NUMBER}-gw
+      - mesh
+    hosts:
+      - ${EXTERNAL_HOST_NSI}
+    http:
+      - match:
+          - gateways:
+              - mesh
+            port: ${{EXTERNAL_PORT_MESH_NSI}}
+        rewrite:
+          authority: ${EXTERNAL_HOST_NSI}
+        route:
+          - destination:
+              host: egressgateway${EXTERNAL_HOST_NSI_NUMBER}-svc
+              port:
+                number: ${{EGRESS_PORT_NSI}}
+      - match:
+          - gateways:
+              - egressgateway-${INTEGRATION_MODULE_NSI}-${EXTERNAL_HOST_NSI_NUMBER}-gw
+            port: ${{EGRESS_PORT_NSI}}
+        rewrite:
+          authority: ${EXTERNAL_HOST_NSI}
+        route:
+          - destination:
+              host: ${EXTERNAL_HOST_NSI}
+              port:
+                number: ${{EXTERNAL_PORT_NSI}}
+- apiVersion: networking.istio.io/v1alpha3
+  kind: EnvoyFilter
+  metadata:
+    name: ott-egress-${INTEGRATION_MODULE_NSI}-auth-filter
+  spec:
+    configPatches:
+      - applyTo: HTTP_FILTER
+        match:
+          context: GATEWAY
+          listener:
+            filterChain:
+              filter:
+                name: envoy.http_connection_manager
+            portNumber: ${{EGRESS_PORT_NSI}}
+        patch:
+          operation: INSERT_BEFORE
+          value:
+            config:
+              failure_mode_allow: false
+              grpc_service:
+                google_grpc:
+                  stat_prefix: ext_authz
+                  target_uri: unix:/mnt/ott-uds-socket/ott.socket
+                timeout: 2s
+              with_request_body:
+                allow_partial_message: true
+                max_request_bytes: 8192
+            name: envoy.ext_authz
+    workloadSelector:
+      labels:
+        app: egressgateway-${PROJECT_NAME}
+
+## UCP EGRESS OBJECTS
+- apiVersion: networking.istio.io/v1alpha3
+  kind: ServiceEntry
+  metadata:
+    name: external-${INTEGRATION_MODULE_UCP}-host${EXTERNAL_HOST_UCP_NUMBER}-se
+  spec:
+    exportTo:
+      - .
+    hosts:
+      - ${EXTERNAL_HOST_UCP}
+    ports:
+      - name: tls-${EXTERNAL_PORT_UCP}
+        number: ${{EXTERNAL_PORT_UCP}}
+        protocol: TLS
+      - name: http-${EXTERNAL_PORT_MESH_UCP}
+        number: ${{EXTERNAL_PORT_MESH_UCP}}
+        protocol: HTTP
+    resolution: DNS
+- apiVersion: networking.istio.io/v1alpha3
+  kind: DestinationRule
+  metadata:
+    name: external-${INTEGRATION_MODULE_UCP}-host${EXTERNAL_HOST_UCP_NUMBER}-dr
+  spec:
+    exportTo:
+      - .
+    host: ${EXTERNAL_HOST_UCP}
+    trafficPolicy:
+      loadBalancer:
+        simple: ROUND_ROBIN
+      portLevelSettings:
+        - port:
+            number: ${{EXTERNAL_PORT_UCP}}
+          tls:
+            caCertificates: /etc/istio/egressgateway-ca-certs-host${EXTERNAL_HOST_UCP_NUMBER}/ca-chain.cert.pem
+            clientCertificate: /etc/istio/egressgateway-certs-host${EXTERNAL_HOST_UCP_NUMBER}/tls.crt
+            mode: MUTUAL
+            privateKey: /etc/istio/egressgateway-certs-host${EXTERNAL_HOST_UCP_NUMBER}/tls.key
+            sni: ${EXTERNAL_HOST_UCP}
+- apiVersion: networking.istio.io/v1alpha3
+  kind: Gateway
+  metadata:
+    name: egressgateway-${INTEGRATION_MODULE_UCP}-${EXTERNAL_HOST_UCP_NUMBER}-gw
+  spec:
+    selector:
+      istio: egressgateway-${PROJECT_NAME}
+    servers:
+      - hosts:
+          - ${EXTERNAL_HOST_UCP}
+        port:
+          name: http-${EGRESS_PORT_UCP}
+          number: ${{EGRESS_PORT_UCP}}
+          protocol: HTTP
+- apiVersion: networking.istio.io/v1alpha3
+  kind: VirtualService
+  metadata:
+    name: external-${INTEGRATION_MODULE_UCP}-host${EXTERNAL_HOST_UCP_NUMBER}-vs
+  spec:
+    exportTo:
+      - .
+    gateways:
+      - egressgateway-${INTEGRATION_MODULE_UCP}-${EXTERNAL_HOST_UCP_NUMBER}-gw
+      - mesh
+    hosts:
+      - ${EXTERNAL_HOST_UCP}
+    http:
+      - match:
+          - gateways:
+              - mesh
+            port: ${{EXTERNAL_PORT_MESH_UCP}}
+        rewrite:
+          authority: ${EXTERNAL_HOST_UCP}
+        route:
+          - destination:
+              host: egressgateway${EXTERNAL_HOST_UCP_NUMBER}-svc
+              port:
+                number: ${{EGRESS_PORT_UCP}}
+      - match:
+          - gateways:
+              - egressgateway-${INTEGRATION_MODULE_UCP}-${EXTERNAL_HOST_UCP_NUMBER}-gw
+            port: ${{EGRESS_PORT_UCP}}
+        rewrite:
+          authority: ${EXTERNAL_HOST_UCP}
+        route:
+          - destination:
+              host: ${EXTERNAL_HOST_UCP}
+              port:
+                number: ${{EXTERNAL_PORT_UCP}}
+- apiVersion: networking.istio.io/v1alpha3
+  kind: EnvoyFilter
+  metadata:
+    name: ott-egress-${INTEGRATION_MODULE_UCP}-auth-filter
+  spec:
+    configPatches:
+      - applyTo: HTTP_FILTER
+        match:
+          context: GATEWAY
+          listener:
+            filterChain:
+              filter:
+                name: envoy.http_connection_manager
+            portNumber: ${{EGRESS_PORT_UCP}}
+        patch:
+          operation: INSERT_BEFORE
+          value:
+            config:
+              failure_mode_allow: false
+              grpc_service:
+                google_grpc:
+                  stat_prefix: ext_authz
+                  target_uri: unix:/mnt/ott-uds-socket/ott.socket
+                timeout: 2s
+              with_request_body:
+                allow_partial_message: true
+                max_request_bytes: 8192
+            name: envoy.ext_authz
+    workloadSelector:
+      labels:
+        app: egressgateway-${PROJECT_NAME}
+
+## AUDIT EGRESS OBJECTS
+- apiVersion: networking.istio.io/v1alpha3
+  kind: ServiceEntry
+  metadata:
+    name: external-${INTEGRATION_MODULE_AUDIT}-host${EXTERNAL_HOST_AUDIT_NUMBER}-se
+  spec:
+    exportTo:
+      - .
+    hosts:
+      - ${EXTERNAL_HOST_AUDIT}
+    ports:
+      - name: tls-${EXTERNAL_PORT_AUDIT}
+        number: ${{EXTERNAL_PORT_AUDIT}}
+        protocol: TLS
+      - name: http-${EXTERNAL_PORT_MESH_AUDIT}
+        number: ${{EXTERNAL_PORT_MESH_AUDIT}}
+        protocol: HTTP
+    resolution: DNS
+- apiVersion: networking.istio.io/v1alpha3
+  kind: DestinationRule
+  metadata:
+    name: external-${INTEGRATION_MODULE_AUDIT}-host${EXTERNAL_HOST_AUDIT_NUMBER}-dr
+  spec:
+    exportTo:
+      - .
+    host: ${EXTERNAL_HOST_AUDIT}
+    trafficPolicy:
+      loadBalancer:
+        simple: ROUND_ROBIN
+      portLevelSettings:
+        - port:
+            number: ${{EXTERNAL_PORT_AUDIT}}
+          tls:
+            caCertificates: /etc/istio/egressgateway-ca-certs-host${EXTERNAL_HOST_AUDIT_NUMBER}/ca-chain.cert.pem
+            clientCertificate: /etc/istio/egressgateway-certs-host${EXTERNAL_HOST_AUDIT_NUMBER}/tls.crt
+            mode: MUTUAL
+            privateKey: /etc/istio/egressgateway-certs-host${EXTERNAL_HOST_AUDIT_NUMBER}/tls.key
+            sni: ${EXTERNAL_HOST_AUDIT}
+- apiVersion: networking.istio.io/v1alpha3
+  kind: Gateway
+  metadata:
+    name: egressgateway-${INTEGRATION_MODULE_AUDIT}-${EXTERNAL_HOST_AUDIT_NUMBER}-gw
+  spec:
+    selector:
+      istio: egressgateway-${PROJECT_NAME}
+    servers:
+      - hosts:
+          - ${EXTERNAL_HOST_AUDIT}
+        port:
+          name: http-${EGRESS_PORT_AUDIT}
+          number: ${{EGRESS_PORT_AUDIT}}
+          protocol: HTTP
+- apiVersion: networking.istio.io/v1alpha3
+  kind: VirtualService
+  metadata:
+    name: external-${INTEGRATION_MODULE_AUDIT}-host${EXTERNAL_HOST_AUDIT_NUMBER}-vs
+  spec:
+    exportTo:
+      - .
+    gateways:
+      - egressgateway-${INTEGRATION_MODULE_AUDIT}-${EXTERNAL_HOST_AUDIT_NUMBER}-gw
+      - mesh
+    hosts:
+      - ${EXTERNAL_HOST_AUDIT}
+    http:
+      - match:
+          - gateways:
+              - mesh
+            port: ${{EXTERNAL_PORT_MESH_AUDIT}}
+        rewrite:
+          authority: ${EXTERNAL_HOST_AUDIT}
+        route:
+          - destination:
+              host: egressgateway${EXTERNAL_HOST_AUDIT_NUMBER}-svc
+              port:
+                number: ${{EGRESS_PORT_AUDIT}}
+      - match:
+          - gateways:
+              - egressgateway-${INTEGRATION_MODULE_AUDIT}-${EXTERNAL_HOST_AUDIT_NUMBER}-gw
+            port: ${{EGRESS_PORT_AUDIT}}
+        rewrite:
+          authority: ${EXTERNAL_HOST_AUDIT}
+        route:
+          - destination:
+              host: ${EXTERNAL_HOST_AUDIT}
+              port:
+                number: ${{EXTERNAL_PORT_AUDIT}}
+- apiVersion: networking.istio.io/v1alpha3
+  kind: EnvoyFilter
+  metadata:
+    name: ott-egress-${INTEGRATION_MODULE_AUDIT}-auth-filter
+  spec:
+    configPatches:
+      - applyTo: HTTP_FILTER
+        match:
+          context: GATEWAY
+          listener:
+            filterChain:
+              filter:
+                name: envoy.http_connection_manager
+            portNumber: ${{EGRESS_PORT_AUDIT}}
+        patch:
+          operation: INSERT_BEFORE
+          value:
+            config:
+              failure_mode_allow: false
+              grpc_service:
+                google_grpc:
+                  stat_prefix: ext_authz
+                  target_uri: unix:/mnt/ott-uds-socket/ott.socket
+                timeout: 2s
+              with_request_body:
+                allow_partial_message: true
+                max_request_bytes: 8192
+            name: envoy.ext_authz
+    workloadSelector:
+      labels:
+        app: egressgateway-${PROJECT_NAME}
+
+## CURRENCY RATES EGRESS OBJECTS
+- apiVersion: networking.istio.io/v1alpha3
+  kind: ServiceEntry
+  metadata:
+    name: external-${INTEGRATION_MODULE_RATES}-host${EXTERNAL_HOST_RATES_NUMBER}-se
+  spec:
+    exportTo:
+      - .
+    hosts:
+      - ${EXTERNAL_HOST_RATES}
+    ports:
+      - name: tls-${EXTERNAL_PORT_RATES}
+        number: ${{EXTERNAL_PORT_RATES}}
+        protocol: TLS
+      - name: http-${EXTERNAL_PORT_MESH_RATES}
+        number: ${{EXTERNAL_PORT_MESH_RATES}}
+        protocol: HTTP
+    resolution: DNS
+- apiVersion: networking.istio.io/v1alpha3
+  kind: DestinationRule
+  metadata:
+    name: external-${INTEGRATION_MODULE_RATES}-host${EXTERNAL_HOST_RATES_NUMBER}-dr
+  spec:
+    exportTo:
+      - .
+    host: ${EXTERNAL_HOST_RATES}
+    trafficPolicy:
+      loadBalancer:
+        simple: ROUND_ROBIN
+      portLevelSettings:
+        - port:
+            number: ${{EXTERNAL_PORT_RATES}}
+          tls:
+            caCertificates: /etc/istio/egressgateway-ca-certs-host${EXTERNAL_HOST_RATES_NUMBER}/ca-chain.cert.pem
+            clientCertificate: /etc/istio/egressgateway-certs-host${EXTERNAL_HOST_RATES_NUMBER}/tls.crt
+            mode: MUTUAL
+            privateKey: /etc/istio/egressgateway-certs-host${EXTERNAL_HOST_RATES_NUMBER}/tls.key
+            sni: ${EXTERNAL_HOST_RATES}
+- apiVersion: networking.istio.io/v1alpha3
+  kind: Gateway
+  metadata:
+    name: egressgateway-${INTEGRATION_MODULE_RATES}-${EXTERNAL_HOST_RATES_NUMBER}-gw
+  spec:
+    selector:
+      istio: egressgateway-${PROJECT_NAME}
+    servers:
+      - hosts:
+          - ${EXTERNAL_HOST_RATES}
+        port:
+          name: http-${EGRESS_PORT_RATES}
+          number: ${{EGRESS_PORT_RATES}}
+          protocol: HTTP
+- apiVersion: networking.istio.io/v1alpha3
+  kind: VirtualService
+  metadata:
+    name: external-${INTEGRATION_MODULE_RATES}-host${EXTERNAL_HOST_RATES_NUMBER}-vs
+  spec:
+    exportTo:
+      - .
+    gateways:
+      - egressgateway-${INTEGRATION_MODULE_RATES}-${EXTERNAL_HOST_RATES_NUMBER}-gw
+      - mesh
+    hosts:
+      - ${EXTERNAL_HOST_RATES}
+    http:
+      - match:
+          - gateways:
+              - mesh
+            port: ${{EXTERNAL_PORT_MESH_RATES}}
+        rewrite:
+          authority: ${EXTERNAL_HOST_RATES}
+        route:
+          - destination:
+              host: egressgateway${EXTERNAL_HOST_RATES_NUMBER}-svc
+              port:
+                number: ${{EGRESS_PORT_RATES}}
+      - match:
+          - gateways:
+              - egressgateway-${INTEGRATION_MODULE_RATES}-${EXTERNAL_HOST_RATES_NUMBER}-gw
+            port: ${{EGRESS_PORT_RATES}}
+        rewrite:
+          authority: ${EXTERNAL_HOST_RATES}
+        route:
+          - destination:
+              host: ${EXTERNAL_HOST_RATES}
+              port:
+                number: ${{EXTERNAL_PORT_RATES}}
+- apiVersion: networking.istio.io/v1alpha3
+  kind: EnvoyFilter
+  metadata:
+    name: ott-egress-${INTEGRATION_MODULE_RATES}-auth-filter
+  spec:
+    configPatches:
+      - applyTo: HTTP_FILTER
+        match:
+          context: GATEWAY
+          listener:
+            filterChain:
+              filter:
+                name: envoy.http_connection_manager
+            portNumber: ${{EGRESS_PORT_RATES}}
+        patch:
+          operation: INSERT_BEFORE
+          value:
+            config:
+              failure_mode_RATESw: false
+              grpc_service:
+                google_grpc:
+                  stat_prefix: ext_authz
+                  target_uri: unix:/mnt/ott-uds-socket/ott.socket
+                timeout: 2s
+              with_request_body:
+                RATESw_partial_message: true
+                max_request_bytes: 8192
+            name: envoy.ext_authz
+    workloadSelector:
+      labels:
+        app: egressgateway-${PROJECT_NAME}
+
+## ALLO IFT EGRESS OBJECTS
+- apiVersion: networking.istio.io/v1alpha3
+  kind: ServiceEntry
+  metadata:
+    name: external-${INTEGRATION_MODULE_ALLO}-host${EXTERNAL_HOST_ALLO_NUMBER}-se
+  spec:
+    exportTo:
+      - .
+    hosts:
+      - ${EXTERNAL_HOST_ALLO}
+    ports:
+      - name: tls-${EXTERNAL_PORT_ALLO}
+        number: ${{EXTERNAL_PORT_ALLO}}
+        protocol: TLS
+      - name: http-${EXTERNAL_PORT_MESH_ALLO}
+        number: ${{EXTERNAL_PORT_MESH_ALLO}}
+        protocol: HTTP
+    resolution: DNS
+- apiVersion: networking.istio.io/v1alpha3
+  kind: DestinationRule
+  metadata:
+    name: external-${INTEGRATION_MODULE_ALLO}-host${EXTERNAL_HOST_ALLO_NUMBER}-dr
+  spec:
+    exportTo:
+      - .
+    host: ${EXTERNAL_HOST_ALLO}
+    trafficPolicy:
+      loadBalancer:
+        simple: ROUND_ROBIN
+      portLevelSettings:
+        - port:
+            number: ${{EXTERNAL_PORT_ALLO}}
+          tls:
+            caCertificates: /etc/istio/egressgateway-ca-certs-host${EXTERNAL_HOST_ALLO_NUMBER}/ca-chain.cert.pem
+            clientCertificate: /etc/istio/egressgateway-certs-host${EXTERNAL_HOST_ALLO_NUMBER}/tls.crt
+            mode: MUTUAL
+            privateKey: /etc/istio/egressgateway-certs-host${EXTERNAL_HOST_ALLO_NUMBER}/tls.key
+            sni: ${EXTERNAL_HOST_ALLO}
+- apiVersion: networking.istio.io/v1alpha3
+  kind: Gateway
+  metadata:
+    name: egressgateway-${INTEGRATION_MODULE_ALLO}-${EXTERNAL_HOST_ALLO_NUMBER}-gw
+  spec:
+    selector:
+      istio: egressgateway-${PROJECT_NAME}
+    servers:
+      - hosts:
+          - ${EXTERNAL_HOST_ALLO}
+        port:
+          name: http-${EGRESS_PORT_ALLO}
+          number: ${{EGRESS_PORT_ALLO}}
+          protocol: HTTP
+- apiVersion: networking.istio.io/v1alpha3
+  kind: VirtualService
+  metadata:
+    name: external-${INTEGRATION_MODULE_ALLO}-host${EXTERNAL_HOST_ALLO_NUMBER}-vs
+  spec:
+    exportTo:
+      - .
+    gateways:
+      - egressgateway-${INTEGRATION_MODULE_ALLO}-${EXTERNAL_HOST_ALLO_NUMBER}-gw
+      - mesh
+    hosts:
+      - ${EXTERNAL_HOST_ALLO}
+    http:
+      - match:
+          - gateways:
+              - mesh
+            port: ${{EXTERNAL_PORT_MESH_ALLO}}
+        rewrite:
+          authority: ${EXTERNAL_HOST_ALLO}
+        route:
+          - destination:
+              host: egressgateway${EXTERNAL_HOST_ALLO_NUMBER}-svc
+              port:
+                number: ${{EGRESS_PORT_ALLO}}
+      - match:
+          - gateways:
+              - egressgateway-${INTEGRATION_MODULE_ALLO}-${EXTERNAL_HOST_ALLO_NUMBER}-gw
+            port: ${{EGRESS_PORT_ALLO}}
+        rewrite:
+          authority: ${EXTERNAL_HOST_ALLO}
+        route:
+          - destination:
+              host: ${EXTERNAL_HOST_ALLO}
+              port:
+                number: ${{EXTERNAL_PORT_ALLO}}
+- apiVersion: networking.istio.io/v1alpha3
+  kind: EnvoyFilter
+  metadata:
+    name: ott-egress-${INTEGRATION_MODULE_ALLO}-auth-filter
+  spec:
+    configPatches:
+      - applyTo: HTTP_FILTER
+        match:
+          context: GATEWAY
+          listener:
+            filterChain:
+              filter:
+                name: envoy.http_connection_manager
+            portNumber: ${{EGRESS_PORT_ALLO}}
+        patch:
+          operation: INSERT_BEFORE
+          value:
+            config:
+              failure_mode_allow: false
+              grpc_service:
+                google_grpc:
+                  stat_prefix: ext_authz
+                  target_uri: unix:/mnt/ott-uds-socket/ott.socket
+                timeout: 2s
+              with_request_body:
+                allow_partial_message: true
+                max_request_bytes: 8192
+            name: envoy.ext_authz
+    workloadSelector:
+      labels:
+        app: egressgateway-${PROJECT_NAME}
+
+parameters:
+- name: PROJECT_NAME
+  required: true
+- name: APP_NAME
+  required: true
+- name: ISTIO_CONTROL_PLANE
+  required: true
+- name: PROXY_IMAGE
+  required: true
+- name: EGRESS_CA_CERT
+  required: true
+- name: EGRESS_CERTS_CRT
+  required: true
+- name: EGRESS_CERTS_KEY
+  required: true
+- name: OTT_IMAGE
+  required: true
+
+## NSI PARAMETERS
+- name: EXTERNAL_HOST_NSI
+  required: true
+- name: EXTERNAL_PORT_NSI
+  required: true
+- name: EXTERNAL_PORT_MESH_NSI
+  required: true
+- name: EGRESS_PORT_NSI
+  required: true
+- name: EXTERNAL_HOST_NSI_NUMBER
+  value: null
+- name: INTEGRATION_MODULE_NSI
+  required: true
+
+## UCP PARAMETERS
+- name: EXTERNAL_HOST_UCP
+  required: true
+- name: EXTERNAL_PORT_UCP
+  required: true
+- name: EXTERNAL_PORT_MESH_UCP
+  required: true
+- name: EGRESS_PORT_UCP
+  required: true
+- name: EXTERNAL_HOST_UCP_NUMBER
+  value: null
+- name: INTEGRATION_MODULE_UCP
+  required: true
+
+## AUDIT PARAMETERS
+- name: EXTERNAL_HOST_AUDIT
+  required: true
+- name: EXTERNAL_PORT_AUDIT
+  required: true
+- name: EXTERNAL_PORT_MESH_AUDIT
+  required: true
+- name: EGRESS_PORT_AUDIT
+  required: true
+- name: EXTERNAL_HOST_AUDIT_NUMBER
+  value: null
+- name: INTEGRATION_MODULE_AUDIT
+  required: true
+
+## CURRENCY RATES
+- name: EXTERNAL_HOST_RATES
+  required: true
+- name: EXTERNAL_PORT_RATES
+  required: true
+- name: EXTERNAL_PORT_MESH_RATES
+  required: true
+- name: EGRESS_PORT_RATES
+  required: true
+- name: EXTERNAL_HOST_RATES_NUMBER
+  value: null
+- name: INTEGRATION_MODULE_RATES
+  required: true
+
+## ALLO INGRESS PARAMETERS
+- name: EXTERNAL_HOST_ALLO
+  required: true
+- name: EXTERNAL_PORT_ALLO
+  required: true
+- name: EXTERNAL_PORT_MESH_ALLO
+  required: true
+- name: EGRESS_PORT_ALLO
+  required: true
+- name: EXTERNAL_HOST_ALLO_NUMBER
+  value: null
+- name: INTEGRATION_MODULE_ALLO
+  required: true

@@ -1,0 +1,13 @@
+oc rsync . allo-ui-669448f554-jfb5x:/opt/app-root/src/assets/
+
+oc rsync . allo-ui-6f7bdd579d-gn2tq:/opt/app-root/src/
+
+oc get deploy,dc,svc,vs,cm,dr,envoyfilters,gw,se,sidecars,routes,
+authorizationpolicies,policies -n ci01098420-idevgen-allowance --show-labels | grep "maistra.io/owner"
+
+oc exec egressgateway-ci01098420-idevgen-udkzift-bd76fc7f4-dgwb9 -c istio-proxy --  curl localhost:15000/config_dump | grep ext_authz -A 10 -B 10
+
+oc create secret generic secretName --from-file=published.pem --from-file=chain_pem.txt --from-file=tengry_allo_ift.key
+
+oc process -f logger-endpoint-template.yml --param-file=params.conf | oc create -f -
+

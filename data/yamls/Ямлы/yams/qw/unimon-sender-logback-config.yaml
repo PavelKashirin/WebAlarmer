@@ -1,0 +1,84 @@
+# ${distrib.release.version} - версия релиза (пример: RO1)
+# D-03.000.00-1192_client - номер сборки дистрибутива (пример: R1-109)
+
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: "unimon-sender-logback-config.r3"
+  labels:
+    app: "unimon-sender-${distrib.release.version}"
+    app-group: "unimon-sender"
+    ts: "unimon"
+    version: "D-03.000.00-1192_client"
+data:
+  logback.xml: |-
+    <?xml version="1.0" encoding="UTF-8"?>
+    <configuration debug="true" scan="true" scanPeriod="60 seconds">
+        <property name="unimon-sender.loggingDir" value="${unimon-sender.loggingDir}" />
+        <property name="unimon-sender.loggingJSONFile" value="${unimon-sender.loggingJSONFile}" />
+
+        <appender name="JSON" class="ch.qos.logback.core.rolling.RollingFileAppender">
+            <file>${unimon-sender.loggingDir}/${unimon-sender.loggingJSONFile}</file>
+            <encoder class="net.logstash.logback.encoder.LoggingEventCompositeJsonEncoder">
+                <providers>
+                    <timestamp>
+                        <fieldName>serverEventDatetime</fieldName>
+                        <pattern>[UNIX_TIMESTAMP_AS_NUMBER]</pattern>
+                    </timestamp>
+                    <logLevel>
+                        <fieldName>levelStr</fieldName>
+                    </logLevel>
+                    <logLevelValue>
+                        <fieldName>levelInt</fieldName>
+                    </logLevelValue>
+                    <loggerName>
+                        <fieldName>loggerName</fieldName>
+                    </loggerName>
+                    <threadName>
+                        <fieldName>threadName</fieldName>
+                    </threadName>
+                    <callerData>
+                        <classFieldName>callerClass</classFieldName>
+                        <methodFieldName>callerMethod</methodFieldName>
+                        <lineFieldName>callerLine</lineFieldName>
+                        <fileFieldName>callerFile</fileFieldName>
+                    </callerData>
+                    <message/>
+                    <stackTrace>
+                        <fieldName>stackTrace</fieldName>
+                        <throwableConverter class="net.logstash.logback.stacktrace.ShortenedThrowableConverter">
+                            <maxDepthPerThrowable>30</maxDepthPerThrowable>
+                            <maxLength>4096</maxLength>
+                            <rootCauseFirst>true</rootCauseFirst>
+                        </throwableConverter>
+                    </stackTrace>
+                    <nestedField>
+                        <fieldName>mdc</fieldName>
+                        <providers>
+                            <mdc/>
+                        </providers>
+                    </nestedField>
+                </providers>
+            </encoder>
+            <rollingPolicy class="ch.qos.logback.core.rolling.SizeAndTimeBasedRollingPolicy">
+                <fileNamePattern>${unimon-sender.loggingDir}/${unimon-sender.loggingJSONFile}_%d{yyyy-MM-dd}_%i.zip</fileNamePattern>
+                <maxFileSize>10MB</maxFileSize>
+                <maxHistory>5</maxHistory>
+                <totalSizeCap>50MB</totalSizeCap>
+            </rollingPolicy>
+        </appender>
+
+        <appender name="STDOUT" class="ch.qos.logback.core.ConsoleAppender">
+            <withJansi>true</withJansi>
+            <encoder>
+                <pattern>%d{ISO8601} [%t] [%level] \(%c\) [%C::%M:%L] mdc:\(%mdc\)| %m%n</pattern>
+                <charset>UTF-8</charset>
+            </encoder>
+        </appender>
+
+
+        <root level="info">
+            <appender-ref ref="STDOUT"/>
+            <appender-ref ref="JSON"/>
+        </root>
+    </configuration>

@@ -1,0 +1,29 @@
+# ${distrib.release.version} - версия релиза (пример: RO1)
+
+kind: Service
+apiVersion: v1
+metadata:
+  name: ingressgateway-monitoring-${distrib.release.version}
+  labels:
+    app: ingressgateway-umon-${projectName}
+    app-group: "unimon-ingress"
+    chart: gateways
+    heritage: Tiller
+    istio: ingressgateway-umon-${projectName}
+    release: istio
+spec:
+  ports:
+    - name: status-port
+      protocol: TCP
+      port: 15021
+      targetPort: 15021
+    - name: https-11443
+      protocol: TCP
+      port: 11443
+      targetPort: 11443
+  selector:
+    app: ingressgateway-umon-${projectName}
+    istio: ingressgateway-umon-${projectName}
+    release: istio
+  type: ClusterIP
+  sessionAffinity: None

@@ -1,0 +1,32 @@
+﻿kind: ConfigMap
+apiVersion: v1
+metadata:
+  name: ufs-monitoring.unimon-agent.conf.r3
+  namespace: ci01098420-idevgen-allowanceift
+  uid: d92f37d7-6b0c-48c8-ae9a-e8c099b55f96
+  resourceVersion: '865752139'
+  creationTimestamp: '2022-03-22T00:10:56Z'
+data:
+  unimon-agent.istio.exclude.outbound.ports: '8080,8081,443'
+  unimon-agent.resources.openshift.cpuRequest: 500m
+  unimon-agent.openshift.autoscaling.replicas: '1'
+  unimon-agent.scraping.federate.unimonId: infra-metic-unimon
+  UNIMON_SENDER_URL: 'http://unimon-sender-r3:10098/monitoring/v1/metrics/send'
+  unimon-agent.scraping.file-discovery.configmap.name: file-discovery-config
+  unimon-agent.docker.image.path: efs/ci01976100/ci02702773_opm_unimon/unimon-agent
+  unimon-agent.scraping.federate.port: '9090'
+  unimon-agent.resources.openshift.cpuLimit: 500m
+  unimon-agent.scraping.global.interval: 15s
+  unimon-agent.scraping.federate.enable: disable_federate
+  unimon-agent.scraping.selfmonitoring.unimonId: prometheus-selfmonitoring
+  unimon-agent.scraping.federate.interval: 30s
+  monitoring.imagePullSecrets.name: nexus3
+  unimon-agent.unimonId: unimon-agent
+  unimon-agent.scraping.file-discovery.interval: 1m
+  unimon-agent.scraping.federate.host: federate.openshift-monitoring.svc.cluster.local
+  unimon-agent.resources.openshift.memRequest: 1000Mi
+  unimon-agent.scraping.file-discovery.timeout: 15s
+  unimon-agent.scraping.federate.timeout: 3s
+  unimon-agent.scraping.global.timeout: 3s
+  unimon-agent.resources.openshift.memLimit: 1000Mi
+  unimon-agent.scraping.file-discovery.targets.filename: targets.json

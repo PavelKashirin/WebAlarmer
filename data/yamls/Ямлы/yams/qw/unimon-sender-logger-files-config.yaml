@@ -1,0 +1,46 @@
+# D-03.000.00-1192_client - номер сборки дистрибутива (пример: R1-109)
+
+kind: ConfigMap
+apiVersion: v1
+metadata:
+  name: unimon-sender-logger-files-config.r3
+  labels:
+    app: "logger-forwarder-sidecar"
+    app-group: "unimon-sender"
+    ts: "unimon"
+    version: "D-03.000.00-1192_client"
+data:
+  parsers.conf: |-
+    [PARSER]
+        Name custom
+        Format json
+        Time_Key timestamp
+        Time_Format %Y-%m-%dT%H:%M:%S.%L%z
+  fluent-bit.conf: |-
+    [SERVICE]
+        Flush        1
+        Daemon       Off
+        Parsers_File /fluent-bit/etc/parsers.conf
+
+    [INPUT]
+        Name tail
+        Path /var/log/unimon-sender-log/*.json
+        Mem_Buf_Limit 5MB
+        Skip_Long_Lines On
+        Parser custom
+
+    [FILTER]
+        Name modify
+        Match *
+        Add cluster ${clusterName}
+        Add namespace %{NAMESPACE}
+        Add node %{NODE}
+        Add pod %{POD}
+        Add service unimon-sender
+        Add moduleVersion D-03.000.00-1192_client
+        Add moduleId unimon-sender
+        Add application unimon-sender
+        Add standId ${logger.labels.standid}
+    [OUTPUT]
+        Name stdout
+        Match *

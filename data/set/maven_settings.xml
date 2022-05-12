@@ -1,0 +1,98 @@
+<settings>
+    <servers>
+        <!-- Пароль должен быть зашифрован джобой Encryptor -->
+        <!-- https://sbt-jenkins.ca.sbrf.ru/jenkins/job/RKO/job/Deals/job/OpenShift/job/common/job/encryptPassword/
+        {BmuchHfevz0HPars7VI1vSaMVKyWi24+tNI7K7IZTlQ=} -->
+
+        <server>
+            <id>release.repo</id>
+            <username>login</username>
+            <password>pass</password>
+        </server>
+        <server>
+            <id>snapshot.repo</id>
+            <username>login</username>
+            <password>pass</password>
+        </server>
+        <server>
+            <id>corp-snapshots</id>
+            <username>login</username>
+            <password>pass</password>
+        </server>
+        <server>
+            <id>corp-releases</id>
+            <username>login</username>
+            <password>pass</password>
+        </server>
+        <server>
+            <id>internal</id>
+            <username>login</username>
+            <password>pass</password>
+        </server>
+        <server>
+            <id>Nexus_PROD</id>
+            <username>login</username>
+            <password>pass</password>
+        </server>
+        <server>
+            <id>SBT_CI_distr_repo</id>
+            <username>login</username>
+            <password>pass</password>
+        </server>
+    </servers>
+
+    <mirrors>
+        <mirror>
+            <id>internal</id>
+            <name>Mirror of central</name>
+            <url>http://sbtnexus.delta.sbrf.ru:8081/nexus/content/groups/internal</url>
+            <mirrorOf>*</mirrorOf>
+        </mirror>
+    </mirrors>
+
+    <profiles>
+        <profile>
+            <id>default</id>
+            <repositories>
+                <repository>
+                    <id>corp-releases</id>
+                    <url>https://sbtnexus.delta.sbrf.ru/nexus/content/repositories/corp-releases/</url>
+                    <snapshots>
+                        <enabled>false</enabled>
+                    </snapshots>
+                </repository>
+                <repository>
+                    <id>corp-snapshots</id>
+                    <url>https://sbtnexus.delta.sbrf.ru/nexus/content/repositories/corp-snapshots/</url>
+                </repository>
+            </repositories>
+            <pluginRepositories>
+                <pluginRepository>
+                    <id>corp-releases</id>
+                    <url>https://sbtnexus.delta.sbrf.ru/nexus/content/repositories/corp-releases/</url>
+                    <snapshots>
+                        <enabled>false</enabled>
+                    </snapshots>
+                </pluginRepository>
+                <pluginRepository>
+                    <id>corp-snapshots</id>
+                    <url>https://sbtnexus.delta.sbrf.ru/nexus/content/repositories/corp-snapshots/</url>
+                </pluginRepository>
+            </pluginRepositories>
+        </profile>
+        <profile>
+            <id>sonar</id>
+            <activation>
+                <activeByDefault>true</activeByDefault>
+            </activation>
+            <properties>
+                <sonar.host.url>https://sonar.delta.sbrf.ru/sonar</sonar.host.url>
+                <sonar.login>sonarToken(1203hdaf)</sonar.login>
+                <sonar.java.coveragePlugin>jacoco</sonar.java.coveragePlugin>
+            </properties>
+        </profile>
+    </profiles>
+    <activeProfiles>
+        <activeProfile>default</activeProfile>
+    </activeProfiles>
+</settings>

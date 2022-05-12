@@ -1,0 +1,24 @@
+# ${distrib.release.version} - версия релиза (пример: RO1)
+
+apiVersion: autoscaling/v1
+kind: HorizontalPodAutoscaler
+metadata:
+    labels:
+        app: "unimon-sender-${distrib.release.version}"
+        app-group: "unimon-sender"
+        ts: "unimon"
+    name: 'unimon-sender-${distrib.release.version}'
+spec:
+    maxReplicas: ${unimon-sender.openshift.autoscaling.maxReplicas}
+    minReplicas: ${unimon-sender.openshift.autoscaling.minReplicas}
+    metrics:
+    - type: Resource
+      resource:
+          name: cpu
+          target:
+              type: Utilization
+              averageUtilization: 75
+    scaleTargetRef:
+        apiVersion: v1
+        kind: DeploymentConfig
+        name: 'unimon-sender-${distrib.release.version}'

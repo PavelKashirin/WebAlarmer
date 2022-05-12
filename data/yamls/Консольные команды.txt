@@ -1,0 +1,28 @@
+--add-opens java.base/java.lang=ALL-UNNAMED
+
+java -cp .\allo-repository.jar allo-repository ru.sbrf.pprb.allo.Application
+
+curl -v http://nsi-ift.dev-apps.ocp-geo.delta.sbrf.ru:2301/health/sayOk
+
+openssl s_client -connect  10.53.143.194:9093  ñòÿíóòü ñåðòèôèêàòû 
+
+curl -v http://nsi-ift.dev-apps.ocp-geo.delta.sbrf.ru:2301/health/sayOk --cacert chain.p7b --cert published.cer --key rmansc.key
+
+keytool -list -keystore keystore.jks -storepass 12345678
+
+openssl req -out sudirallo.csr -newkey rsa:2048 -nodes -keyout server.key -config conf.cnf
+
+keytool -import -alias sbrf1 -file root.cer -keystore devsudir.jks
+
+keytool -importkeystore \
+    -srckeystore rmansc.jks \
+    -destkeystore keystore_result.p12 \
+    -deststoretype PKCS12 \
+    -srcalias rmansC \
+    -deststorepass 79Vbythfkrf \
+    -destkeypass 79Vbythfkrf
+
+keytool -genkey -keyalg EC -sigalg SHA256withECDSA -keystore rmanift.p12 -storetype PKCS12 -keysize 256 -dname "CN=00CA0000PS.CI03132808.sbrf,OU=00CA,O=Savings Bank of the Russian Federation,C=RU" -alias rmanift
+                                                                                                                               ÊÝ ÔÏ             
+keytool -certreq -keyalg EC -sigalg SHA256withECDSA -keystore rmanift.p12 -storetype PKCS12 -alias rmanift > rmanift_cert_req.pem
+

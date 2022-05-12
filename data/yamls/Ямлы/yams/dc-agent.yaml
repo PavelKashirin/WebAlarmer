@@ -1,0 +1,285 @@
+# ${distrib.release.version} - версия релиза (пример: RO1)
+# D-03.000.00-1192_client - номер сборки дистрибутива (пример: R1-109)
+# ${unimon-agent.openshift.autoscaling.replicas} - количество реплик модуля, которые будут развернуты (пример: 1)
+# ${monitoring.imagePullSecrets.name} - имя секрета для скачивания образа из registry (пример: nexus3)
+# ${docker.registry} - url registry (пример: registry.sigma.sbrf.ru)
+# ${unimon-agent.docker.image.path} - путь к образу unimon-agent (пример: efs/ci01976100/ci02702773_opm_unimon/unimon-agent)
+# ${RETENTION_PERIOD} - время хранения метрик в памяти Unimon-agent. По умолчанию 1d (1m - 1 минута, 1h - 1 час,  1d - 1 день, 1y - 1 год)
+# ${unimon-agent.scraping.file-discovery.configmap.name} - Имя конфиг-мапы для монтирования файла с эндпоинтами
+#                                                       (пример file-discovery-config)
+# ${unimon-agent.resources.openshift.cpuRequest} - зарезервированное количество CPU для Unimon-agent (пример: 500m)
+# ${unimon-agent.resources.openshift.memRequest} - зарезервированное количество памяти для Unimon-agent (пример: 1Gi)
+# ${unimon-agent.resources.openshift.cpuLimit} - лимит количества CPU для Unimon-agent (пример: 500m)
+# ${unimon-agent.resources.openshift.memLimit} - лимит количества памяти для Unimon-agent (пример: 1Gi)
+
+kind: DeploymentConfig
+apiVersion: apps.openshift.io/v1
+metadata:
+  name: "unimon-agent-${distrib.release.version}"
+  labels:
+    app: "unimon-agent-${distrib.release.version}"
+    artifact: "unimon-agent-${distrib.release.version}"
+    app-group: "unimon-agent"
+    version: "D-03.000.00-1192_client"
+    ts: "unimon"
+spec:
+  replicas: ${unimon-agent.openshift.autoscaling.replicas}
+  selector:
+    app: "unimon-agent-${distrib.release.version}"
+    artifact: "unimon-agent-${distrib.release.version}"
+    version: "D-03.000.00-1192_client"
+  strategy:
+    type: Recreate
+  template:
+    metadata:
+      labels:
+        app: "unimon-agent-${distrib.release.version}"
+        artifact: "unimon-agent-${distrib.release.version}"
+        version: "D-03.000.00-1192_client"
+        unimonId: "${unimon-agent.unimonId}"
+      annotations:
+        sidecar.istio.io/inject: "${unimon-agent.sidecar.istio.inject}"
+        traffic.sidecar.istio.io/excludeOutboundPorts: '${unimon-agent.sidecar.istio.exclude.outbound.ports}'
+    spec:
+      volumes:
+        - name: "unimon-agent-config"
+          configMap:
+            name: "unimon-agent-config.${distrib.release.version}"
+        - name: "file-discovery-config"
+          configMap:
+            name: "${unimon-agent.scraping.file-discovery.configmap.name}"
+            optional: true
+        - name: "unimon-agent-file-sd-configs"
+          emptyDir: { }
+        - name: "unimon-agent-data"
+          emptyDir: { }
+        - name: "logs-share"
+          emptyDir: { }
+        - name: "istio-ca-agent-cert"
+          secret:
+            secretName: egressgateway-ca-certs.${distrib.release.version}
+            defaultMode: 420
+            optional: true
+        - name: "istio-agent-certs"
+          secret:
+            secretName: egressgateway-certs.${distrib.release.version}
+            defaultMode: 420
+            optional: true
+        - name: "unimon-agent-logger-files-config"
+          configMap:
+            name: "unimon-agent-logger-files-config.${distrib.release.version}"
+            defaultMode: 420
+        - name: "fluent-bit-config"
+          emptyDir: { }
+      #{% if UNIMON_LOGGER_EFS_ENABLE %}
+      #        - name: "logger-kafka-certs-secret"
+      #          secret:
+      #            secretName: "${logger.efs.kafka.certs.secret.name}"
+      #{% endif %}
+      serviceAccountName: "prometheus"  #для сбора системных метрик, необходимо имя пользователя prometheus
+      imagePullSecrets:
+        - name: "${monitoring.imagePullSecrets.name}"
+      initContainers:
+        - name: unimon-agent-file-sd-init
+          image: "${docker.registry.proxy}/ci02587203/ci02809205_tengri/unimon-agent@sha256:0ec13a50dfa65ec1cf8583ef640271e14392534f1d2c21f758eb0e0e441f7540"
+          env:
+            - name: "POD_NAMESPACE"
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.namespace
+            - name: "POD_NAME"
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.name
+            - name: "NODE_NAME"
+              valueFrom:
+                fieldRef:
+                  fieldPath: spec.nodeName
+            - name: "APPLICATION"
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.labels['app']
+            - name: "CHANNEL"
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.labels['CHANNEL']
+            - name: "JENKINS_DEPLOY_USER"
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.labels['jenkinsDeployUser']
+            - name: "SUBSYSTEM"
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.labels['SUBSYSTEM']
+            - name: "DISTRIB_VERSION"
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.labels['distribVersion']
+            - name: "UNIMON_VERSION"
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.labels['version']
+            - name: "DEPLOY_DATE"
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.labels['deployDate']
+            - name: "ENVIR"
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.labels['ENVIR']
+            - name: "DISTRIB_RELEASE_VERSION"
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.labels['distribReleaseVersion']
+            - name: "JENKINS_DEPLOYID"
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.labels['jenkinsDeployId']
+            - name: "ISTIO_MODE"
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.labels['security.istio.io/tlsMode']
+            - name: "DEPLOYMENT"
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.labels['deployment']
+            - name: "DEPLOYMENT_CONFIG"
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.labels['deploymentconfig']
+          imagePullPolicy: Always
+          command:
+            - sh
+            - '-c'
+            - >-
+              echo -e
+              "[{\"targets\":[\"localhost:9090\"],\"labels\":{\"nodeName\":\"$NODE_NAME\",\"namespace\":\"$POD_NAMESPACE\",
+              \"pod\":\"$POD_NAME\",\"app\":\"$APPLICATION\",\"unimonVersion\":\"$UNIMON_VERSION\",\"tenant\":\"${TENANT}\",\"CHANNEL\":\"$CHANNEL\",
+              \"jenkinsDeployUser\":\"$JENKINS_DEPLOY_USER\",\"SUBSYSTEM\":\"$SUBSYSTEM\",\"distribVersion\":\"$DISTRIB_VERSION\",
+              \"deployDate\":\"$DEPLOY_DATE\",\"ENVIR\":\"$ENVIR\",\"distribReleaseVersion\":\"$DISTRIB_RELEASE_VERSION\",
+              \"jenkinsDeployId\":\"$JENKINS_DEPLOYID\",\"security_istio_io_tlsMode\":\"$ISTIO_MODE\",\"service\":\"$APPLICATION\",
+              \"source\":\"OpenShift\",\"deploymentconfig\":\"$DEPLOYMENT_CONFIG\",\"deployment\":\"$DEPLOYMENT\"}}]\n"
+              > /etc/unimon-agent/file-sd-configs/selfmonitoring.json
+          volumeMounts:
+            - name: "unimon-agent-file-sd-configs"
+              mountPath: "/etc/unimon-agent/file-sd-configs"
+      containers:
+        - name: "unimon-agent"
+          securityContext:
+            runAsNonRoot: true
+          image: "${docker.registry.proxy}/ci02587203/ci02809205_tengri/unimon-agent@sha256:0ec13a50dfa65ec1cf8583ef640271e14392534f1d2c21f758eb0e0e441f7540"
+          command:
+            - /bin/sh
+            - '-c'
+            - >
+              echo "WARNING! Entrypoint of container was overridden and forward stdout to
+              /var/log/unimon-agent-log/unimon-agent.log.json"
+
+              /bin/prometheus --config.file=/etc/unimon-agent/prometheus.yml
+              --storage.tsdb.path=/data/unimon-agent --storage.tsdb.retention.time=${RETENTION_PERIOD}
+              --web.console.libraries=/usr/share/prometheus/console_libraries
+              --web.console.templates=/usr/share/prometheus/consoles
+              --log.format=json
+              
+          imagePullPolicy: Always
+          env:
+            - name: "POD_NAMESPACE"
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.namespace
+            - name: "POD_NAME"
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.name
+            - name: "NODE_NAME"
+              valueFrom:
+                fieldRef:
+                  fieldPath: spec.nodeName
+          readinessProbe:
+            exec:
+              command:
+                - sh
+                - '-c'
+                - '/bin/wget -q --spider http://localhost:9090/-/healthy'
+          livenessProbe:
+            exec:
+              command:
+                - sh
+                - '-c'
+                - '/bin/wget -q --spider http://localhost:9090/-/healthy'
+          volumeMounts:
+            - name: "unimon-agent-config"
+              mountPath: "/etc/unimon-agent"
+            - name: "unimon-agent-file-sd-configs"
+              mountPath: "/etc/unimon-agent/file-sd-configs"
+            - mountPath: "/data/unimon-agent"
+              name: "unimon-agent-data"
+            - name: "istio-agent-certs"
+              mountPath: /etc/istio-certs
+              readOnly: true
+            - name: "istio-ca-agent-cert"
+              mountPath: /etc/istio-ca-certs
+              readOnly: true
+            - name: "logs-share"
+              mountPath: "/var/log/unimon-agent-log"
+            - name: "file-discovery-config"
+              mountPath: "/etc/unimon-agent/file-discovery-config"
+          resources:
+            requests:
+              cpu: 750m
+              memory: 1000Mi
+            limits:
+              cpu: 900m
+              memory: 1000Mi
+        - name: logger-forwarder-sidecar
+          image: "${docker.registry.proxy}/ci02587203/ci02809205_tengri/fluent-bit@sha256:b936f6ee378b733214b110b70c18a2ee68175d874bddf65f2c85daf9ffc6f879"
+          resources:
+            limits:
+              memory: 200Mi
+              cpu: 200m
+            requests:
+              memory: 100Mi
+              cpu: 100m
+          env:
+            - name: NODE
+              valueFrom:
+                fieldRef:
+                  fieldPath: spec.nodeName
+            - name: POD
+              valueFrom:
+                fieldRef:
+                  apiVersion: v1
+                  fieldPath: metadata.name
+            - name: NAMESPACE
+              valueFrom:
+                fieldRef:
+                  apiVersion: v1
+                  fieldPath: metadata.namespace
+          #{% if UNIMON_LOGGER_EFS_ENABLE %}
+          #            - name: KEY_PASSWORD
+          #              valueFrom:
+          #                secretKeyRef:
+          #                  name: "${logger.efs.kafka.certs.secret.name}"
+          #                  key: KEY_PASSWORD
+          #{% endif %}
+          volumeMounts:
+            - name: "logs-share"
+              mountPath: /var/log/unimon-agent-log
+            - name: "unimon-agent-logger-files-config"
+              mountPath: /fluent-bit/configmap
+            - name: "fluent-bit-config"
+              mountPath: /fluent-bit/etc
+          #{% if UNIMON_LOGGER_EFS_ENABLE %}
+          #            - name: "logger-kafka-certs-secret"
+          #              mountPath: /etc/config/ssl
+          #{% endif %}
+          command:
+            - sh
+            - '-c'
+            - sed 's/%{/${/g' /fluent-bit/configmap/fluent-bit.conf > /fluent-bit/etc/fluent-bit.conf;
+              cp /fluent-bit/configmap/parsers.conf /fluent-bit/etc/parsers.conf;
+              cp /fluent-bit/configmap/time_converter.lua /fluent-bit/etc/time_converter.lua;
+              ${logger.fluent-bit.docker.executable.file.path} -c /fluent-bit/etc/fluent-bit.conf
+      restartPolicy: Always
+      securityContext:
+        runAsNonRoot: true

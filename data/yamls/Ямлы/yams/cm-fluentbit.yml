@@ -1,0 +1,66 @@
+kind: ConfigMap
+apiVersion: v1
+metadata:
+  name: cm-fluentbit
+data:
+  fluent-bit.conf: |-
+    [SERVICE]
+      Flush        1
+      Daemon       Off
+      Parsers_File /fluent-bit/etc/parsers.conf
+      Log_Level info
+    [INPUT]
+      Name tail
+      Path /tmp/*.json
+      Mem_Buf_Limit 5MB
+      Skip_Long_Lines On
+      Parser custom
+    [FILTER]
+      Name modify
+      Match *
+      Add cluster ${cluster}
+      Add pod ${pod}
+      Add moduleId ${moduleId}
+      Add moduleVersion ${moduleVersion}
+      Add nodeId ${nodeId}
+      Add standId ${standId}
+      Add sourcetype timestamp
+    [OUTPUT]
+      Name http
+      Match *
+      Host ${FLUENT_BIT_HOST}
+      Port ${FLUENT_BIT_PORT}
+      URI /v1/events
+      Format json
+      json_date_key timestamp
+    [OUTPUT]
+      Name stdout
+      Match *
+  parsers.conf: |-
+    [PARSER]
+      Name custom
+      Format json
+      Time_Key timestamp
+      Time_Keep On
+    [PARSER]
+      Name loggermod_head
+      Format regex
+      Regex ^(?<time>[^ ]* {1,2}[^ ]*) \[(?<threadName>[^ ]*)\] \[(?<levelStr>[^ ]*)\] \((?<loggerName>[^ ]*)\) \[(?<callerClass>[^:]*)\:\:(?<callerMethod>[^:]*)\:(?<callerLine>[^ ]*)\](\s+mdc:)(?<mdc>[^|]*)(\|\s+)(?<message>.*)
+      Time_Key time
+      Time_Format %Y-%m-%d %H:%M:%S,%L
+      Time_Keep On
+    [PARSER]
+      Name loggermod
+      Format regex
+      Regex (?m-ix)^(?<time>[^ ]* {1,2}[^ ]*) \[(?<threadName>[^ ]*)\] \[(?<levelStr>[^ ]*)\] \((?<loggerName>[^ ]*)\) \[(?<callerClass>[^:]*)\:\:(?<callerMethod>[^:]*)\:(?<callerLine>[^ ]*)\](\s+mdc:)(?<mdc>[^|]*)(\|\s+)(?<message>.*)
+      Time_Key time
+      Time_Format %Y-%m-%d %H:%M:%S,%L
+      Time_Keep On
+
+parameters:
+  - name: FLUENT_BIT_HOST
+    description: Host для логирования
+    required: true
+  - name: FLUENT_BIT_PORT
+    description: Port для логирования
+    required: true

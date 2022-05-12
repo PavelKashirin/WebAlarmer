@@ -1,0 +1,340 @@
+apiVersion: template.openshift.io/v1
+kind: Template
+labels:
+  app: unimon-sender
+  type: application
+  installPriority: "3"
+  template: unimon-sender-template
+  template_version: v1
+  deleteLabel: unimon-sender
+
+metadata:
+  name: unimon-sender-template
+  annotations:
+    description: |-
+      This is template ALLO-Reserve microservice
+    iconClass: wheelchair-alt
+    tags: allo-reserve-base-templates, allo-reserve-base-template
+objects:
+  - kind: DeploymentConfig
+    apiVersion: apps.openshift.io/v1
+    metadata:
+        labels:
+            ts: "unimon"
+            app: "unimon-sender-${distrib_release_version}"
+            artifact: "unimon-sender-${distrib_release_version}"
+            app-group: "unimon-sender"
+            version: "D-03.000.00-1192_client"       # название Docker-образа (как правило, это имя FP), нужно изменить на свое;
+        name: 'unimon-sender-${distrib_release_version}'                # название DeploymentConfig (как правило, это имя FP), нужно изменить на свое;
+    spec:
+        replicas: ${unimon_sender_openshift_autoscaling_minReplicas}
+        selector:
+            app: "unimon-sender-${distrib_release_version}"
+            artifact: "unimon-sender-${distrib_release_version}"
+            version: "D-03.000.00-1192_client"                    #это необходимо для логик работы скриптов развертывания
+        strategy:
+            activeDeadlineSeconds: 21600
+            resources: {}
+            rollingParams:
+                intervalSeconds: 1
+                maxSurge: 25%
+                maxUnavailable: 25%
+                timeoutSeconds: 600
+                updatePeriodSeconds: 1
+            type: Rolling
+        template:
+            metadata:
+                labels:
+                    app: "unimon-sender-${distrib_release_version}"
+                    artifact: "unimon-sender-${distrib_release_version}"
+                    version: "D-03.000.00-1192_client"
+                    unimonId: "${unimon_sender_unimonId}"
+                annotations:
+                    sidecar.istio.io/inject: "${unimon_sender_sidecar_istio_inject}"
+                    sidecar.istio.io/rewriteAppHTTPProbers: '${unimon_sender_sidecar_istio_rewriteAppHTTPProbers}'
+                    traffic.sidecar.istio.io/excludeOutboundPorts: '${unimon_sender_sidecar_istio_exclude_outbound_ports}'
+            spec:
+                dnsPolicy: ClusterFirst
+                restartPolicy: Always
+                volumes:
+                  - name: "unimon-sender-kafka-certs-secret"
+                    secret:
+                      secretName: "${KAFKA_CERTS_SECRET_NAME}"
+                  - name: "unimon-sender-logback-config"
+                    configMap:
+                      name: "unimon-sender-logback-config.${distrib_release_version}"
+                      defaultMode: 420
+                  - name: "logs-share"
+                    emptyDir: {}
+                  - name: "unimon-sender-logger-files-config"
+                    configMap:
+                      name: "unimon-sender-logger-files-config.${distrib_release_version}"
+                      defaultMode: 420
+                  - name: "fluent-bit-config"
+                    emptyDir: {}
+
+                securityContext:
+                  runAsNonRoot: true
+                terminationGracePeriodSeconds: 30
+                containers:
+                - image: "${docker_registry_proxy}/ci02587203/ci02809205_tengri/unimon-sender@sha256:5839b943267b6a31bec14d2ca45661b5c3e83194948416013f7bbd01f39026e8"
+                  name: unimon-sender                                    # название Docker-образа (как правило, это имя FP), нужно изменить на свое;
+                  securityContext:
+                    runAsNonRoot: true
+                  envFrom:
+                  - configMapRef:
+                      name: ufs-monitoring.unimon-sender.conf
+                  env:
+                  - name: SPRING_PROFILES_ACTIVE
+                    value: PROM
+                  - name: "KAFKA_SSL_TRUSTSTORE_PASSWORD"
+                    valueFrom:
+                      secretKeyRef:
+                        name: "${KAFKA_PASSWORDS_SECRET_NAME}"
+                        key: "${KAFKA_SSL_TRUSTSTORE_PASSWORD_KEY}"
+                  - name: "KAFKA_SSL_KEYSTORE_PASSWORD"
+                    valueFrom:
+                      secretKeyRef:
+                        name: "${KAFKA_PASSWORDS_SECRET_NAME}"
+                        key: "${KAFKA_SSL_KEYSTORE_PASSWORD_KEY}"
+                  imagePullPolicy: Always
+                  ports:
+                  - containerPort: 8080
+                    protocol: TCP
+                  - containerPort: 8081
+                    protocol: TCP
+                  livenessProbe:
+                      failureThreshold: 15
+                      httpGet:
+                          path: /actuator/health/liveness
+                          port: 8081
+                          scheme: HTTP
+                      initialDelaySeconds: 20
+                      periodSeconds: 10
+                      successThreshold: 1
+                      timeoutSeconds: 10
+                  readinessProbe:
+                      failureThreshold: 15
+                      httpGet:
+                          path: /actuator/health/readiness
+                          port: 8081
+                          scheme: HTTP
+                      initialDelaySeconds: 30
+                      periodSeconds: 10
+                      successThreshold: 1
+                      timeoutSeconds: 10
+                  resources:
+                      limits:
+                          cpu: ${unimon_sender_openshift_cpuLimit}
+                          memory: ${unimon_sender_openshift_memLimit}
+                      requests:
+                          cpu: ${unimon_sender_openshift_cpuRequest}
+                          memory: ${unimon_sender_openshift_memRequest}
+                  terminationMessagePath: /dev/termination-log
+                  volumeMounts:
+                    - name: "unimon-sender-kafka-certs-secret"
+                      mountPath: "/certificates"
+                    - name: "logs-share"
+                      mountPath: "/var/log/unimon-sender-log"
+                    - name: "unimon-sender-logback-config"
+                      mountPath: "/etc/unimon-sender"
+                - name: logger-forwarder-sidecar
+                  image: "${docker_registry_proxy}/ci02587203/ci02809205_tengri/fluent-bit@sha256:b936f6ee378b733214b110b70c18a2ee68175d874bddf65f2c85daf9ffc6f879"
+                  resources:
+                    limits:
+                      memory: ${logger_resources_openshift_memLimit}
+                      cpu: ${logger_resources_openshift_cpuLimit}
+                    requests:
+                      memory: ${logger_resources_openshift_memRequest}
+                      cpu: ${logger_resources_openshift_cpuRequest}
+                  env:
+                    - name: NODE
+                      valueFrom:
+                        fieldRef:
+                          fieldPath: spec.nodeName
+                    - name: POD
+                      valueFrom:
+                        fieldRef:
+                          apiVersion: v1
+                          fieldPath: metadata.name
+                    - name: NAMESPACE
+                      valueFrom:
+                        fieldRef:
+                          apiVersion: v1
+                          fieldPath: metadata.namespace
+
+                  volumeMounts:
+                    - name: "logs-share"
+                      mountPath: /var/log/unimon-sender-log
+                    - name: "unimon-sender-logger-files-config"
+                      mountPath: /fluent-bit/configmap
+                    - name: "fluent-bit-config"
+                      mountPath: /fluent-bit/etc
+
+                  command:
+                    - sh
+                    - '-c'
+                    - sed 's/%{/${/g' /fluent-bit/configmap/fluent-bit.conf > /fluent-bit/etc/fluent-bit.conf;
+                      cp /fluent-bit/configmap/parsers.conf /fluent-bit/etc/parsers.conf;
+                      ${logger.fluent-bit.docker.executable.file.path} -c /fluent-bit/etc/fluent-bit.conf
+        triggers:
+        - type: ConfigChange
+
+  - kind: Route
+    apiVersion: route.openshift.io/v1
+    metadata:
+      annotations:
+        haproxy.router.openshift.io/rate-limit-connections: '${unimon_sender_openshift_route_rate_limit_connections}'
+        haproxy.router.openshift.io/rate-limit-connections.concurrent-tcp: '${unimon_sender_openshift_route_rate_limit_connections.concurrent_tcp}'
+        haproxy.router.openshift.io/timeout-tunnel: ${unimon_sender_openshift_route_timeout_tunnel}
+      name: unimon-sender-${distrib_release_version}
+      labels:
+        app: unimon-sender-${distrib_release_version}
+        app-group: "unimon-sender"
+    spec:
+      host: '${distrib_release_version}.unimon-sender.${projectName}.${appsDomain}'
+      to:
+        kind: Service
+        name: unimon-sender-${distrib_release_version}
+        weight: 100
+      port:
+        targetPort: http-for-write-metrics
+      wildcardPolicy: None
+
+  - kind: HorizontalPodAutoscaler
+    apiVersion: autoscaling/v1
+    metadata:
+        labels:
+            app: "unimon-sender-${distrib_release_version}"
+            app-group: "unimon-sender"
+            ts: "unimon"
+        name: 'unimon-sender-${distrib_release_version}'
+    spec:
+        maxReplicas: ${unimon_sender_openshift_autoscaling_maxReplicas}
+        minReplicas: ${unimon_sender_openshift_autoscaling_minReplicas}
+        metrics:
+        - type: Resource
+          resource:
+              name: cpu
+              target:
+                  type: Utilization
+                  averageUtilization: 75
+        scaleTargetRef:
+            apiVersion: v1
+            kind: DeploymentConfig
+            name: 'unimon-sender-${distrib_release_version}'
+
+  - kind: Service
+    apiVersion: v1
+    metadata:
+      labels:
+        app: unimon-sender-${distrib_release_version}
+        app-group: "unimon-sender"
+        version: "D-03.000.00-1192_client"
+        ts: "unimon"
+      name: 'unimon-sender-${distrib_release_version}'
+      annotations:
+        prometheus.io.scrape: "true"
+        prometheus.io.path: "/actuator/prometheus"
+        prometheus.io.port: "8081"
+    spec:
+      ports:
+        - name: "http"
+          port: 8080
+          targetPort: 8080
+        - name: "http-actuator"
+          port: 8081
+          targetPort: 8081
+        - name: "http-for-write-metrics"
+          port: 10098
+          targetPort: 8080
+      selector:
+        deploymentconfig: 'unimon-sender-${distrib_release_version}'
+      type: ClusterIP
+
+parameters:
+  - name: distrib_release_version
+    required: true
+    value: "r3"
+  - name: unimon_sender_openshift_autoscaling_minReplicas
+    required: true
+    value: "1"
+  - name: unimon_sender_unimonId
+    required: true
+    value: "unimon-sender"
+  - name: unimon_sender_sidecar_istio_inject
+    required: true
+    value: "true"
+  - name: unimon_sender_sidecar_istio_rewriteAppHTTPProbers
+    required: true
+    value: "false"
+  - name: unimon_sender_sidecar_istio_exclude_outbound_ports
+    required: true
+    value: "443"
+  - name: KAFKA_CERTS_SECRET_NAME
+    required: true
+    value: "unimon-sender-kafka-certs-secret-ift1"
+  - name: docker_registry_proxy
+    required: true
+    value: "registry.delta.sbrf.ru/sigma"
+  - name: KAFKA_PASSWORDS_SECRET_NAME
+    required: true
+    value: "unimon-sender-kafka-certs-secret-ift1"
+  - name: KAFKA_SSL_TRUSTSTORE_PASSWORD_KEY
+    required: true
+    value: "KAFKA_SSL_TRUSTSTORE_PASSWORD"
+  - name: KAFKA_SSL_KEYSTORE_PASSWORD_KEY
+    required: true
+    value: "KAFKA_SSL_KEYSTORE_PASSWORD"
+  - name: unimon_sender_openshift_cpuLimit
+    required: true
+    value: "300m"
+  - name: unimon_sender_openshift_memLimit
+    required: true
+    value: "200Mi"
+  - name: logger_resources_openshift_memRequest
+    required: true
+    value: "150m"
+  - name: logger_resources_openshift_memRequest
+    required: true
+    value: "100Mi"
+  - name: unimon_sender_openshift_route_rate_limit_connections
+    required: true
+    value: "true"
+  - name: unimon_sender_openshift_route_rate_limit_connections_concurrent_tcp
+    required: true
+    value: "100"
+  - name: unimon_sender_openshift_route_timeout_tunnel
+    required: true
+    value: "1m"
+  - name: projectName
+    required: true
+    value: "ci01098420-idevgen-allowanceift"
+  - name: appsDomain
+    required: true
+    value: "apps.dev-gen.delta.sbrf.ru"
+  - name: unimon_sender_openshift_autoscaling_maxReplicas
+    required: true
+    value: "1"
+  - name: unimon_sender_openshift_autoscaling_minReplicas
+    required: true
+    value: "1"
+  - name: logger_resources_openshift_cpuRequest
+    required: true
+    value: "150m"
+  - name: logger_resources_openshift_cpuLimit
+    required: true
+    value: "300m"
+  - name: logger_resources_openshift_memRequest
+    required: true
+    value: "150m"
+  - name: logger_resources_openshift_memLimit
+    required: true
+    value: "300m"
+  - name: unimon_sender_openshift_memRequest
+    required: true
+    value: "100Mi"
+  - name: unimon_sender_openshift_memLimit
+    required: true
+    value: "200Mi"
+    

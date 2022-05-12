@@ -1,0 +1,16 @@
+[ req ]
+default_bits       = 2048
+distinguished_name = req_distinguished_name
+req_extensions     = req_ext
+prompt             = no
+
+[ req_distinguished_name ]
+C  = RU
+L  = Moscow
+ST = Moscow
+O  = SberBank of the Russian Federation
+OU = 00CA
+CN = 00CA0022CI03132793
+
+[ req_ext ]
+extendedKeyUsage = clientAuth

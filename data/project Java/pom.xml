@@ -1,0 +1,329 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <groupId>ru.sbrf.pprb.allo</groupId>
+    <artifactId>allo-iam-back</artifactId>
+    <version>1.0.0-SNAPSHOT</version>
+
+    <properties>
+        <spring.version>2.6.2</spring.version>
+        <resources.encoding>UTF-8</resources.encoding>
+        <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+        <java.version>11</java.version>
+        <maven.compiler.source>11</maven.compiler.source>
+        <maven.compiler.target>11</maven.compiler.target>
+        <jib-maven-plugin.version>3.1.1</jib-maven-plugin.version>
+        <lombok.version>1.18.22</lombok.version>
+        <jacoco-maven-plugin.version>0.8.7</jacoco-maven-plugin.version>
+        <ucp-kb-api.version>12.1.83</ucp-kb-api.version>
+
+        <nsi-cloud-version>4.6.7</nsi-cloud-version>
+        <nsi-version>4.6.4</nsi-version>
+        <nsi-cloud.version>4.6.2</nsi-cloud.version>
+        <currency-rates-cb-cloud-api.version>4.0.40</currency-rates-cb-cloud-api.version>
+
+
+        <logback-classic.version>1.2.3</logback-classic.version>
+        <logstash-logback-encoder.version>6.3</logstash-logback-encoder.version>
+
+        <io.micrometer.version>1.8.3</io.micrometer.version>
+
+        <!-- FOR UNIT TEST -->
+        <junit.version>4.13</junit.version>
+        <junit-platform-launcher.version>1.8.1</junit-platform-launcher.version>
+    </properties>
+
+    <dependencies>
+        <dependency>
+            <groupId>com.google.cloud.tools</groupId>
+            <artifactId>jib-maven-plugin</artifactId>
+            <version>${jib-maven-plugin.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-web</artifactId>
+            <version>${spring.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-actuator</artifactId>
+            <version>${spring.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-test</artifactId>
+            <version>${spring.version}</version>
+        </dependency>
+
+        <!-- Metrics -->
+        <dependency>
+            <groupId>io.micrometer</groupId>
+            <artifactId>micrometer-core</artifactId>
+            <version>${io.micrometer.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>io.micrometer</groupId>
+            <artifactId>micrometer-registry-prometheus</artifactId>
+            <version>${io.micrometer.version}</version>
+        </dependency>
+
+<!--        <dependency>-->
+<!--            <groupId>org.springframework.boot</groupId>-->
+<!--            <artifactId>spring-boot-starter-thymeleaf</artifactId>-->
+<!--            <version>2.6.3</version>-->
+<!--        </dependency>-->
+
+        <dependency>
+            <groupId>org.projectlombok</groupId>
+            <artifactId>lombok</artifactId>
+            <version>${lombok.version}</version>
+            <scope>provided</scope>
+        </dependency>
+
+        <!-- TEST -->
+        <dependency>
+            <groupId>junit</groupId>
+            <artifactId>junit</artifactId>
+            <version>${junit.version}</version>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.junit.platform</groupId>
+            <artifactId>junit-platform-launcher</artifactId>
+            <version>${junit-platform-launcher.version}</version>
+            <scope>test</scope>
+        </dependency>
+
+        <!-- Aspect -->
+        <dependency>
+            <groupId>org.aspectj</groupId>
+            <artifactId>aspectjweaver</artifactId>
+            <version>1.9.8</version>
+            <scope>runtime</scope>
+        </dependency>
+
+        <dependency>
+            <groupId>org.aspectj</groupId>
+            <artifactId>aspectjrt</artifactId>
+            <version>1.9.8</version>
+        </dependency>
+        <!-- LOG -->
+<!--        <dependency>-->
+<!--            <groupId>ch.qos.logback</groupId>-->
+<!--            <artifactId>logback-classic</artifactId>-->
+<!--            <version>${logback-classic.version}</version>-->
+<!--        </dependency>-->
+<!--        <dependency>-->
+<!--            <groupId>net.logstash.logback</groupId>-->
+<!--            <artifactId>logstash-logback-encoder</artifactId>-->
+<!--            <version>${logstash-logback-encoder.version}</version>-->
+<!--        </dependency>-->
+
+<!--        <dependency>-->
+<!--            <groupId>ru.sbrf.stoplist</groupId>-->
+<!--            <artifactId>stoplist-services-api</artifactId>-->
+<!--            <version>1.1.0</version>-->
+<!--        </dependency>-->
+
+        <!-- audit proxy client-->
+<!--        <dependency>-->
+<!--            <groupId>sbp.ts.audit2</groupId>-->
+<!--            <artifactId>audit2-proxy-client</artifactId>-->
+<!--            <version>4.6.8</version>-->
+<!--        </dependency>-->
+
+        <!--NSI Cloud-->
+<!--        <dependency>-->
+<!--            <groupId>sbp.com.sbt.nsi.cloud</groupId>-->
+<!--            <artifactId>nsi-cloud-api</artifactId>-->
+<!--            <version>${nsi-cloud.version}</version>-->
+<!--            <exclusions>-->
+<!--                <exclusion>-->
+<!--                    <groupId>com.fasterxml.jackson.core</groupId>-->
+<!--                    <artifactId>jackson-annotations</artifactId>-->
+<!--                </exclusion>-->
+<!--                <exclusion>-->
+<!--                    <groupId>com.fasterxml.jackson.core</groupId>-->
+<!--                    <artifactId>jackson-core</artifactId>-->
+<!--                </exclusion>-->
+<!--            </exclusions>-->
+<!--        </dependency>-->
+<!--        <dependency>-->
+<!--            <groupId>sbp.com.sbt.nsi.cloud</groupId>-->
+<!--            <artifactId>nsi-cloud-client</artifactId>-->
+<!--            <version>${nsi-cloud.version}</version>-->
+<!--            <exclusions>-->
+<!--                <exclusion>-->
+<!--                    <groupId>org.springframework</groupId>-->
+<!--                    <artifactId>spring-context</artifactId>-->
+<!--                </exclusion>-->
+<!--                <exclusion>-->
+<!--                    <groupId>org.springframework</groupId>-->
+<!--                    <artifactId>spring-beans</artifactId>-->
+<!--                </exclusion>-->
+<!--                <exclusion>-->
+<!--                    <groupId>org.springframework</groupId>-->
+<!--                    <artifactId>spring-core</artifactId>-->
+<!--                </exclusion>-->
+<!--            </exclusions>-->
+<!--        </dependency>-->
+<!--        <dependency>-->
+<!--            <groupId>sbp.ru.sbt.pricing</groupId>-->
+<!--            <artifactId>currency-rates-cb-cloud-api</artifactId>-->
+<!--            <version>${currency-rates-cb-cloud-api.version}</version>-->
+<!--        </dependency>-->
+
+<!--        <dependency>-->
+<!--            <groupId>sbp.ts.audit2</groupId>-->
+<!--            <artifactId>audit2-proxy-client-ott</artifactId>-->
+<!--            <version>4.6.8</version>-->
+<!--        </dependency>-->
+
+<!--         NSI FACADE 4G-->
+<!--        <dependency>-->
+<!--            <groupId>sbp.com.sbt.nsi.cloud</groupId>-->
+<!--            <artifactId>nsi-cloud-api</artifactId>-->
+<!--            <version>${nsi-cloud-version}</version>-->
+<!--        </dependency>-->
+<!--        <dependency>-->
+<!--            <groupId>sbp.com.sbt.nsi.cloud</groupId>-->
+<!--            <artifactId>nsi-cloud-client</artifactId>-->
+<!--            <version>${nsi-cloud-version}</version>-->
+<!--        </dependency>-->
+<!--        <dependency>-->
+<!--            <groupId>sbp.com.sbt.nsifacade</groupId>-->
+<!--            <artifactId>nsi-api</artifactId>-->
+<!--            <version>${nsi-version}</version>-->
+<!--        </dependency>-->
+
+        <!-- UCP -->
+        <!--DTOs для вызова адаптера (ЮЛ)-->
+<!--        <dependency>-->
+<!--            <groupId>com.sbt.kb.ucp</groupId>-->
+<!--            <artifactId>ucp-corp-api</artifactId>-->
+<!--            <version>${ucp-kb-api.version}</version>-->
+<!--        </dependency>-->
+<!--        <dependency>-->
+<!--            &lt;!&ndash;Модель данных для Organizations (ЮЛ)&ndash;&gt;-->
+<!--            <groupId>com.sbt.kb.ucp</groupId>-->
+<!--            <artifactId>ucp-corp-model</artifactId>-->
+<!--            <version>${ucp-kb-api.version}</version>-->
+<!--        </dependency>-->
+<!--        <dependency>-->
+<!--            &lt;!&ndash;Модель данных общая часть ФЛ и ЮЛ (СФЛ)&ndash;&gt;-->
+<!--            <groupId>com.sbt.kb.ucp</groupId>-->
+<!--            <artifactId>ucp-common-model</artifactId>-->
+<!--            <version>${ucp-kb-api.version}</version>-->
+<!--        </dependency>-->
+<!--        <dependency>-->
+<!--            &lt;!&ndash;Модель данных для Individuals (СФЛ)&ndash;&gt;-->
+<!--            <groupId>com.sbt.kb.ucp</groupId>-->
+<!--            <artifactId>ucp-retail-model</artifactId>-->
+<!--            <version>${ucp-kb-api.version}</version>-->
+<!--        </dependency>-->
+    </dependencies>
+
+    <build>
+        <finalName>allo-iam-back</finalName>
+        <pluginManagement><!-- lock down plugins versions to avoid using Maven defaults (may be moved to parent pom) -->
+            <plugins>
+                <plugin>
+                    <artifactId>maven-clean-plugin</artifactId>
+                    <version>3.1.0</version>
+                </plugin>
+                <!-- see http://maven.apache.org/ref/current/maven-core/default-bindings.html#Plugin_bindings_for_war_packaging -->
+                <plugin>
+                    <artifactId>maven-resources-plugin</artifactId>
+                    <version>3.0.2</version>
+                </plugin>
+                <plugin>
+                    <artifactId>maven-compiler-plugin</artifactId>
+                    <version>3.8.0</version>
+                </plugin>
+                <plugin>
+                    <artifactId>maven-surefire-plugin</artifactId>
+                    <version>2.22.1</version>
+                </plugin>
+                <plugin>
+                    <artifactId>maven-war-plugin</artifactId>
+                    <version>3.2.2</version>
+                </plugin>
+                <plugin>
+                    <artifactId>maven-install-plugin</artifactId>
+                    <version>2.5.2</version>
+                </plugin>
+                <plugin>
+                    <artifactId>maven-deploy-plugin</artifactId>
+                    <version>2.8.2</version>
+                </plugin>
+            </plugins>
+        </pluginManagement>
+
+        <plugins>
+            <plugin>
+                <groupId>com.google.cloud.tools</groupId>
+                <artifactId>jib-maven-plugin</artifactId>
+                <version>3.1.1</version>
+                <configuration>
+                    <to>
+                        <image>registry.delta.sbrf.ru/pprb-dev/ci01098420/ci03132793_allo_dev/allo-iam-back</image>
+                        <tags>
+                            <tag>latest</tag>
+                            <tag>v1</tag>
+                        </tags>
+                        <auth>
+                            <username>login</username>
+                            <password>pass</password>
+                        </auth>
+                    </to>
+                    <from>
+<!--                        <image>registry.delta.sbrf.ru/sigma/registry_redhat_io/ubi8/openjdk-17:latest</image>-->
+                        <image>registry.delta.sbrf.ru/base/redhat/openjdk/openjdk-11-rhel8:latest</image>
+                        <auth>
+                            <username>login</username>
+                            <password>pass</password>
+                        </auth>
+                    </from>
+                    <allowInsecureRegistries>true</allowInsecureRegistries>
+                </configuration>
+            </plugin>
+            <plugin>
+                <groupId>org.jacoco</groupId>
+                <artifactId>jacoco-maven-plugin</artifactId>
+                <version>${jacoco-maven-plugin.version}</version>
+                <executions>
+                    <execution>
+                        <id>agent</id>
+                        <goals>
+                            <goal>prepare-agent</goal>
+                        </goals>
+                    </execution>
+                    <execution>
+                        <id>report</id>
+                        <goals>
+                            <goal>report</goal>
+                        </goals>
+                    </execution>
+                </executions>
+            </plugin>
+            <plugin>
+                <groupId>org.springframework.boot</groupId>
+                <artifactId>spring-boot-maven-plugin</artifactId>
+                <version>${spring.version}</version>
+                <configuration>
+                    <mainClass>ru.sbrf.pprb.allo.Application</mainClass>
+                </configuration>
+                <executions>
+                    <execution>
+                        <goals>
+                            <goal>repackage</goal>
+                        </goals>
+                    </execution>
+                </executions>
+            </plugin>
+        </plugins>
+    </build>
+</project>
