@@ -1,0 +1,1 @@
+java ${JVM_OPTION} -cp rmanmodel-model-jpa.jar  -Dlogging.config=/deployments/config/logback/logback.xml -Dspring.config.location=file:/deployments/config/application.properties org.springframework.boot.loader.PropertiesLauncher

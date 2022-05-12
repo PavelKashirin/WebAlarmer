@@ -1,0 +1,7 @@
+FROM st as builder
+
+WORKDIR /appdir
+
+COPY ./eway.jar ./app.jar
+
+ENTRYPOINT ["java", "-jar", "app.jar"]
